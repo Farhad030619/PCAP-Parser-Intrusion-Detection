@@ -245,3 +245,64 @@ def test_syn_flood_detection():
     assert len(flood_alerts) >= 1, "Expected SYN_FLOOD alert to be triggered for the flood IP"
 
 
+def test_pcap_parsing_integration(tmp_path):
+    import subprocess
+    import sys
+    from scapy.utils import wrpcap
+    from scapy.layers.inet import IP, TCP
+
+    pcap_file = tmp_path / "test_scan.pcap"
+    log_file = tmp_path / "test_alerts.log"
+
+    # Create packets simulating a port scan (6 unique ports to exceed threshold 5)
+    packets = []
+    for port in range(80, 86):
+        pkt = IP(src="192.168.1.50", dst="192.168.1.1") / TCP(dport=port)
+        pkt.time = 100.0 + (port - 80) * 0.1
+        packets.append(pkt)
+
+    # Let's also simulate a SYN flood: 6 SYN packets, threshold 5, ratio 5.0
+    for i in range(6):
+        pkt = IP(src="192.168.1.60", dst="192.168.1.1") / TCP(flags="S", dport=80)
+        pkt.time = 200.0 + i * 0.1
+        packets.append(pkt)
+
+    wrpcap(str(pcap_file), packets)
+
+    # Run the CLI as a subprocess
+    cmd = [
+        sys.executable,
+        "src/cli.py",
+        str(pcap_file),
+        "-t", "5",
+        "-w", "5.0",
+        "--syn-threshold", "5",
+        "--syn-ratio", "5.0",
+        "-o", str(log_file),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Check exit code
+    assert result.returncode == 0, f"CLI failed with stderr: {result.stderr}"
+
+    # Check console output
+    assert "Analyzing PCAP file:" in result.stdout
+    assert "Processed" in result.stdout or "packets" in result.stdout
+    assert "[ALERT]" in result.stdout
+    assert "\033[91m" in result.stdout  # Red alert output
+    assert "\033[92m" in result.stdout  # Green summary output
+    assert "Analysis completed." in result.stdout
+
+    # Check log file contents
+    assert log_file.exists(), "Log file was not created"
+    log_content = log_file.read_text()
+    assert "PORT_SCAN Alert:" in log_content
+    assert "SYN_FLOOD Alert:" in log_content
+    # Timestamp should be in the log file
+    import datetime
+    current_year = str(datetime.datetime.now().year)
+    assert current_year in log_content
+
+
+
