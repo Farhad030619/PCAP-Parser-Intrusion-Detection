@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Callable, Optional
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.layers.inet6 import IPv6
 from scapy.packet import Packet
@@ -15,11 +15,13 @@ class NetworkAnalyzer:
         window: float = 5.0,
         syn_flood_threshold: int = 100,
         syn_flood_ratio: float = 10.0,
+        on_alert: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         self.threshold: int = threshold
         self.window: float = window
         self.syn_flood_threshold: int = syn_flood_threshold
         self.syn_flood_ratio: float = syn_flood_ratio
+        self.on_alert: Optional[Callable[[Dict[str, Any]], None]] = on_alert
         # Maps source IP to a list of (timestamp, (destination_port, protocol))
         self.port_scan_history: Dict[str, List[Tuple[float, Tuple[int, str]]]] = {}
         # Maps source IP to the last alert timestamp (float)
@@ -79,15 +81,17 @@ class NetworkAnalyzer:
                             f"SYN_FLOOD Alert: {src_ip} sent {sent} SYN packets "
                             f"but received only {received} SYN-ACK packets"
                         )
-                        print(alert_msg)
-                        self.alerts.append({
+                        alert = {
                             "type": "SYN_FLOOD",
                             "source_ip": src_ip,
                             "timestamp": packet_time,
                             "message": alert_msg,
                             "syn_sent_count": sent,
                             "syn_ack_received_count": received,
-                        })
+                        }
+                        self.alerts.append(alert)
+                        if self.on_alert is not None:
+                            self.on_alert(alert)
 
         # Port Scan Detection
         # Check for destination port in TCP/UDP layer
@@ -136,14 +140,16 @@ class NetworkAnalyzer:
                     f"PORT_SCAN Alert: {src_ip} scanned {len(unique_ports)} "
                     f"unique ports in {self.window}s"
                 )
-                print(alert_msg)
-                self.alerts.append({
+                alert = {
                     "type": "PORT_SCAN",
                     "source_ip": src_ip,
                     "timestamp": packet_time,
                     "message": alert_msg,
                     "unique_ports_count": len(unique_ports)
-                })
+                }
+                self.alerts.append(alert)
+                if self.on_alert is not None:
+                    self.on_alert(alert)
 
     def evaluate_syn_floods(self) -> None:
         """
@@ -160,16 +166,18 @@ class NetworkAnalyzer:
                             f"SYN_FLOOD Alert: {ip} sent {sent} SYN packets "
                             f"but received only {received} SYN-ACK packets"
                         )
-                        print(alert_msg)
                         alert_time = self.last_packet_time if self.last_packet_time > 0 else time.time()
-                        self.alerts.append({
+                        alert = {
                             "type": "SYN_FLOOD",
                             "source_ip": ip,
                             "timestamp": alert_time,
                             "message": alert_msg,
                             "syn_sent_count": sent,
                             "syn_ack_received_count": received,
-                        })
+                        }
+                        self.alerts.append(alert)
+                        if self.on_alert is not None:
+                            self.on_alert(alert)
 
     def _cleanup_history(self, current_time: float) -> None:
         """

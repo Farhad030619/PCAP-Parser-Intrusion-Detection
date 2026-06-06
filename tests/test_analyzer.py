@@ -1,6 +1,12 @@
+import datetime
+import subprocess
+import sys
 import pytest
 from scapy.layers.inet import IP, TCP, UDP
+from scapy.layers.inet6 import IPv6
+from scapy.utils import wrpcap
 from src.analyzer import NetworkAnalyzer
+
 
 def test_port_scan_detection():
     # 1. Instantiate NetworkAnalyzer with threshold 20 and window 5.0 seconds.
@@ -138,7 +144,6 @@ def test_port_scan_multi_ip_isolation():
 
 
 def test_ipv6_port_scan():
-    from scapy.layers.inet6 import IPv6
     analyzer = NetworkAnalyzer(threshold=20, window=5.0)
     scanner_ip = "2001:db8::1"
 
@@ -246,11 +251,6 @@ def test_syn_flood_detection():
 
 
 def test_pcap_parsing_integration(tmp_path):
-    import subprocess
-    import sys
-    from scapy.utils import wrpcap
-    from scapy.layers.inet import IP, TCP
-
     pcap_file = tmp_path / "test_scan.pcap"
     log_file = tmp_path / "test_alerts.log"
 
@@ -300,9 +300,66 @@ def test_pcap_parsing_integration(tmp_path):
     assert "PORT_SCAN Alert:" in log_content
     assert "SYN_FLOOD Alert:" in log_content
     # Timestamp should be in the log file
-    import datetime
     current_year = str(datetime.datetime.now().year)
     assert current_year in log_content
 
 
+def test_on_alert_callback():
+    triggered_alerts = []
 
+    def log_alert(alert):
+        triggered_alerts.append(alert)
+
+    analyzer = NetworkAnalyzer(threshold=2, window=5.0, on_alert=log_alert)
+
+    # Send 3 unique port scans
+    for i in range(3):
+        pkt = IP(src="192.168.1.50", dst="192.168.1.1") / TCP(dport=1000 + i)
+        pkt.time = float(i)
+        analyzer.process_packet(pkt)
+
+    assert len(triggered_alerts) == 1
+    assert triggered_alerts[0]["type"] == "PORT_SCAN"
+    assert triggered_alerts[0]["source_ip"] == "192.168.1.50"
+
+
+def test_cli_missing_file():
+    # Runs the CLI via subprocess with a non-existent file
+    cmd = [
+        sys.executable,
+        "src/cli.py",
+        "non_existent_file.pcap",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "not found" in result.stderr.lower() or "error" in result.stderr.lower()
+
+
+def test_cli_corrupted_pcap(tmp_path):
+    # Writes invalid binary data to a temporary file and runs the CLI on it
+    corrupted_file = tmp_path / "corrupted.pcap"
+    corrupted_file.write_bytes(b"invalid binary data header and packets that cannot be parsed by pcap reader")
+    
+    cmd = [
+        sys.executable,
+        "src/cli.py",
+        str(corrupted_file),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "error" in result.stderr.lower() or "parsing" in result.stderr.lower()
+
+def test_cli_invalid_log_dir(tmp_path):
+    # Runs the CLI with an invalid log file directory path
+    pcap_file = tmp_path / "dummy.pcap"
+    pcap_file.write_bytes(b"")
+    
+    cmd = [
+        sys.executable,
+        "src/cli.py",
+        str(pcap_file),
+        "-o", "/non_existent_directory_12345/invalid_log_path.log"
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "unable to initialize log file" in result.stderr.lower() or "error" in result.stderr.lower()

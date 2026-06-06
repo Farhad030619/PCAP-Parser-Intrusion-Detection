@@ -2,12 +2,12 @@ import argparse
 import logging
 import os
 import sys
+from typing import Dict, Any
 
 # Ensure parent directory of 'src' is in sys.path to support 'import src.analyzer' when executed directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from scapy.utils import PcapReader
-import src.analyzer
 from src.analyzer import NetworkAnalyzer
 
 
@@ -68,14 +68,18 @@ def main() -> None:
     logger.addHandler(console_handler)
 
     # File Handler (writes to configured file with timestamp)
-    file_handler = logging.FileHandler(args.output_log)
-    file_handler.setLevel(logging.INFO)
-    file_formatter = logging.Formatter("%(asctime)s - [ALERT] %(message)s")
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
+    try:
+        file_handler = logging.FileHandler(args.output_log)
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter("%(asctime)s - [ALERT] %(message)s")
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        print(f"Error: Unable to initialize log file '{args.output_log}': {e}", file=sys.stderr)
+        sys.exit(1)
 
-    # Mock the internal print function in analyzer to avoid duplicate standard printing
-    src.analyzer.print = lambda *args, **kwargs: None
+    def log_alert(alert: Dict[str, Any]) -> None:
+        logger.info(alert["message"])
 
     # Initialize analyzer
     analyzer = NetworkAnalyzer(
@@ -83,12 +87,12 @@ def main() -> None:
         window=args.port_window,
         syn_flood_threshold=args.syn_threshold,
         syn_flood_ratio=args.syn_ratio,
+        on_alert=log_alert,
     )
 
     print(f"\033[96mAnalyzing PCAP file: {args.pcap_file}...\033[0m")
 
     packet_count = 0
-    last_alert_count = 0
 
     try:
         with PcapReader(args.pcap_file) as reader:
@@ -96,14 +100,8 @@ def main() -> None:
                 analyzer.process_packet(packet)
                 packet_count += 1
 
-                # Check and log new alerts triggered during processing
-                while len(analyzer.alerts) > last_alert_count:
-                    new_alert = analyzer.alerts[last_alert_count]
-                    logger.info(new_alert["message"])
-                    last_alert_count += 1
-
                 if packet_count % 1000 == 0:
-                    print(f"Processed {packet_count} packets...")
+                    print(f"\033[96mProcessed {packet_count} packets...\033[0m")
 
     except FileNotFoundError:
         print(f"Error: File '{args.pcap_file}' not found.", file=sys.stderr)
@@ -114,10 +112,6 @@ def main() -> None:
 
     # Perform final evaluation for SYN floods
     analyzer.evaluate_syn_floods()
-    while len(analyzer.alerts) > last_alert_count:
-        new_alert = analyzer.alerts[last_alert_count]
-        logger.info(new_alert["message"])
-        last_alert_count += 1
 
     # Print final summary in Green
     total_alerts = len(analyzer.alerts)
