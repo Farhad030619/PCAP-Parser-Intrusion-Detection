@@ -159,6 +159,11 @@ def start_sniff_logic(
     global should_sniff, sniffer_thread, analyzer
     with lock:
         if should_sniff:
+            if analyzer:
+                analyzer.threshold = threshold
+                analyzer.window = window
+                analyzer.syn_flood_threshold = syn_flood_threshold
+                analyzer.syn_flood_ratio = syn_flood_ratio
             return "already running"
         
         should_sniff = True
@@ -221,10 +226,12 @@ app = FastAPI(lifespan=lifespan)
 
 # REST Endpoints
 @app.get("/api/interfaces")
+@app.get("/interfaces")
 def api_get_interfaces() -> dict:
     return {"interfaces": get_if_list()}
 
 @app.post("/api/start")
+@app.post("/start")
 def api_start_sniffing(req: StartRequest) -> dict:
     status = start_sniff_logic(
         interface=req.interface,
@@ -236,9 +243,16 @@ def api_start_sniffing(req: StartRequest) -> dict:
     return {"status": status}
 
 @app.post("/api/stop")
+@app.post("/stop")
 def api_stop_sniffing() -> dict:
     status = stop_sniff_logic()
     return {"status": status}
+
+@app.get("/api/status")
+@app.get("/status")
+def api_get_status() -> dict:
+    with lock:
+        return {"status": "started" if should_sniff else "stopped"}
 
 @app.get("/api/alerts")
 def api_get_alerts() -> dict:

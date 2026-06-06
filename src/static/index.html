@@ -1,1 +1,323 @@
-<html><body>Test Dashboard</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity IDS Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo-area">
+            <svg class="logo-icon" viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <polyline points="8 11 12 15 16 11"></polyline>
+            </svg>
+            <h1>Antigravity IDS Dashboard</h1>
+        </div>
+
+        <div class="connection-status" id="connection-status">
+            <span class="status-dot"></span>
+            <span class="status-text">Connecting...</span>
+        </div>
+
+        <div class="control-bar">
+            <div class="select-wrapper">
+                <label for="interface-select" class="sr-only">Network Interface</label>
+                <select id="interface-select" aria-label="Select Network Interface">
+                    <option value="">Select Interface</option>
+                </select>
+            </div>
+            
+            <button id="start-btn" class="btn btn-primary" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Start Sniffing
+            </button>
+            <button id="stop-btn" class="btn btn-danger" type="button" disabled>
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                </svg>
+                Stop Sniffing
+            </button>
+            <button id="settings-toggle" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="settings-drawer">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                Settings
+            </button>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- Metrics Panel -->
+        <section class="metrics-panel" aria-label="Key Performance Indicators">
+            <div class="metric-card" id="metric-packets">
+                <div class="metric-icon glow-blue">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <span class="metric-label">Packets Processed</span>
+                    <span class="metric-value" id="val-packets">0</span>
+                </div>
+            </div>
+            <div class="metric-card" id="metric-hosts">
+                <div class="metric-icon glow-purple">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <span class="metric-label">Active Hosts</span>
+                    <span class="metric-value" id="val-hosts">0</span>
+                </div>
+            </div>
+            <div class="metric-card" id="metric-alerts">
+                <div class="metric-icon glow-red">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <span class="metric-label">Threat Alerts</span>
+                    <span class="metric-value text-red" id="val-alerts">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Service Monitoring Grid -->
+        <section class="services-section" aria-labelledby="services-heading">
+            <h2 id="services-heading" class="section-title">Service Monitoring</h2>
+            <div class="services-grid">
+                <!-- TikTok Card -->
+                <div class="service-card" id="service-tiktok" data-service="TikTok">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon tiktok-logo">🎵</span>
+                            <h3>TikTok</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YouTube Card -->
+                <div class="service-card" id="service-youtube" data-service="YouTube">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon youtube-logo">📺</span>
+                            <h3>YouTube</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spotify Card -->
+                <div class="service-card" id="service-spotify" data-service="Spotify">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon spotify-logo">🟢</span>
+                            <h3>Spotify</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Netflix Card -->
+                <div class="service-card" id="service-netflix" data-service="Netflix">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon netflix-logo">🎬</span>
+                            <h3>Netflix</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GitHub Card -->
+                <div class="service-card" id="service-github" data-service="GitHub">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon github-logo">🐙</span>
+                            <h3>GitHub</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Google Card -->
+                <div class="service-card" id="service-google" data-service="Google">
+                    <div class="service-header">
+                        <div class="service-brand">
+                            <span class="brand-icon google-logo">🔍</span>
+                            <h3>Google</h3>
+                        </div>
+                        <span class="status-pill status-idle">Idle</span>
+                    </div>
+                    <div class="service-body">
+                        <div class="packet-counter">
+                            <span class="counter-num">0</span>
+                            <span class="counter-lbl">packets</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Splits -->
+        <div class="dashboard-splits">
+            <!-- Left: Live Alert Logs -->
+            <section class="split-col col-left" aria-labelledby="alerts-heading">
+                <div class="col-header">
+                    <h2 id="alerts-heading">Live Alert Logs</h2>
+                    <span class="badge badge-danger" id="alert-badge-count">0</span>
+                </div>
+                <div class="console-wrapper">
+                    <div class="alert-console" id="alert-logs" role="log" aria-live="polite">
+                        <div class="placeholder-msg">No threats detected. System secure.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center: Real-time Packet Stream -->
+            <section class="split-col col-center" aria-labelledby="stream-heading">
+                <div class="col-header">
+                    <h2 id="stream-heading">Real-time Packet Stream</h2>
+                </div>
+                <div class="table-wrapper">
+                    <table class="packet-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Time</th>
+                                <th scope="col">Source</th>
+                                <th scope="col">Destination</th>
+                                <th scope="col">Proto</th>
+                                <th scope="col">Length</th>
+                                <th scope="col">Service</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packet-stream-body">
+                            <tr class="placeholder-row">
+                                <td colspan="6" class="placeholder-msg">Stream waiting for packet ingestion...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Right: Active Hosts Map -->
+            <section class="split-col col-right" aria-labelledby="hosts-heading">
+                <div class="col-header">
+                    <h2 id="hosts-heading">Active Hosts Map</h2>
+                </div>
+                <div class="hosts-wrapper">
+                    <ul class="hosts-list" id="hosts-list">
+                        <li class="placeholder-msg">No active hosts discovered yet.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Settings Drawer / Panel -->
+    <aside id="settings-drawer" class="settings-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
+        <div class="drawer-header">
+            <h2 id="settings-heading">IDS Configuration</h2>
+            <button id="settings-close" class="close-btn" type="button" aria-label="Close Settings">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="drawer-body">
+            <form id="settings-form" class="settings-form">
+                <!-- Port scan threshold -->
+                <div class="setting-group">
+                    <div class="setting-label-row">
+                        <label for="slider-port-threshold">Port Scan Threshold</label>
+                        <span class="setting-val" id="val-port-threshold">20</span>
+                    </div>
+                    <input type="range" id="slider-port-threshold" min="1" max="100" value="20" class="slider">
+                    <span class="setting-desc">Minimum unique ports scanned before triggering alert.</span>
+                </div>
+
+                <!-- Port scan window -->
+                <div class="setting-group">
+                    <div class="setting-label-row">
+                        <label for="slider-port-window">Port Scan Window (seconds)</label>
+                        <span class="setting-val" id="val-port-window">5.0s</span>
+                    </div>
+                    <input type="range" id="slider-port-window" min="1.0" max="30.0" step="0.5" value="5.0" class="slider">
+                    <span class="setting-desc">Time window in seconds to analyze port scan activity.</span>
+                </div>
+
+                <!-- SYN flood threshold -->
+                <div class="setting-group">
+                    <div class="setting-label-row">
+                        <label for="slider-syn-threshold">SYN Flood Threshold</label>
+                        <span class="setting-val" id="val-syn-threshold">100</span>
+                    </div>
+                    <input type="range" id="slider-syn-threshold" min="10" max="500" value="100" class="slider">
+                    <span class="setting-desc">Minimum number of SYN packets in a stream to trigger alert.</span>
+                </div>
+
+                <!-- SYN flood ratio -->
+                <div class="setting-group">
+                    <div class="setting-label-row">
+                        <label for="slider-syn-ratio">SYN/ACK Ratio Threshold</label>
+                        <span class="setting-val" id="val-syn-ratio">10.0</span>
+                    </div>
+                    <input type="range" id="slider-syn-ratio" min="2.0" max="50.0" step="0.5" value="10.0" class="slider">
+                    <span class="setting-desc">Ratio of SYN packets to ACK packets before flagging flood behavior.</span>
+                </div>
+            </form>
+        </div>
+    </aside>
+
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

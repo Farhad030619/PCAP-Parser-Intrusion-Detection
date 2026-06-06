@@ -12,7 +12,7 @@ def client():
     os.makedirs("src/static", exist_ok=True)
     if not os.path.exists("src/static/index.html"):
         with open("src/static/index.html", "w") as f:
-            f.write("<html><body>Test Dashboard</body></html>")
+            f.write("<html><body>Antigravity IDS Dashboard</body></html>")
             
     return TestClient(app)
 
@@ -87,12 +87,12 @@ def test_serve_static_files(client):
     # Test fallback route serving index.html
     response = client.get("/")
     assert response.status_code == 200
-    assert "Test Dashboard" in response.text
+    assert "Antigravity IDS Dashboard" in response.text
     
     # Test serving static files
     response = client.get("/static/index.html")
     assert response.status_code == 200
-    assert "Test Dashboard" in response.text
+    assert "Antigravity IDS Dashboard" in response.text
 
 def test_lock_type():
     import threading
