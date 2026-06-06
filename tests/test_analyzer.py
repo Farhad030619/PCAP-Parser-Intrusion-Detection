@@ -103,3 +103,94 @@ def test_udp_port_scan():
     assert len(analyzer.alerts) == 1, "UDP scans should also trigger port scan alerts"
     assert analyzer.alerts[0]["source_ip"] == scanner_ip
     assert analyzer.alerts[0]["type"] == "PORT_SCAN"
+
+
+def test_port_scan_multi_ip_isolation():
+    analyzer = NetworkAnalyzer(threshold=20, window=5.0)
+    ip_a = "192.168.1.10"
+    ip_b = "192.168.1.20"
+
+    # Send 15 unique TCP port packets from ip_a, and 15 unique TCP port packets from ip_b.
+    # Total unique ports scanned across both is 30, but each has only scanned 15.
+    # Since threshold is 20, neither should trigger an alert.
+    for i in range(15):
+        pkt_a = IP(src=ip_a, dst="192.168.1.1") / TCP(dport=1000 + i)
+        pkt_a.time = float(i * 0.1)
+        analyzer.process_packet(pkt_a)
+
+        pkt_b = IP(src=ip_b, dst="192.168.1.1") / TCP(dport=2000 + i)
+        pkt_b.time = float(i * 0.1)
+        analyzer.process_packet(pkt_b)
+
+    assert len(analyzer.alerts) == 0, (
+        "No alerts should be triggered because each IP only scanned 15 ports"
+    )
+
+    # Now, scan 6 more ports from ip_a to cross the threshold of 20 unique ports for ip_a.
+    for i in range(15, 21):
+        pkt_a = IP(src=ip_a, dst="192.168.1.1") / TCP(dport=1000 + i)
+        pkt_a.time = float(i * 0.1)
+        analyzer.process_packet(pkt_a)
+
+    # Now ip_a has scanned 21 unique ports. ip_a should trigger an alert, but ip_b should not.
+    assert len(analyzer.alerts) == 1
+    assert analyzer.alerts[0]["source_ip"] == ip_a
+
+
+def test_ipv6_port_scan():
+    from scapy.layers.inet6 import IPv6
+    analyzer = NetworkAnalyzer(threshold=20, window=5.0)
+    scanner_ip = "2001:db8::1"
+
+    # Send 21 TCP packets to 21 unique TCP ports from scanner_ip
+    for i in range(21):
+        pkt = IPv6(src=scanner_ip, dst="2001:db8::2") / TCP(dport=3000 + i)
+        pkt.time = i * 0.1
+        analyzer.process_packet(pkt)
+
+    assert len(analyzer.alerts) == 1, "IPv6 port scans should trigger alerts"
+    assert analyzer.alerts[0]["source_ip"] == scanner_ip
+    assert analyzer.alerts[0]["type"] == "PORT_SCAN"
+
+
+def test_protocol_ambiguity_unique_ports():
+    analyzer = NetworkAnalyzer(threshold=20, window=5.0)
+    scanner_ip = "192.168.1.100"
+
+    # Send packets to same port number but different protocols:
+    # We send to 11 unique ports on TCP and 11 unique ports on UDP, all using the same port numbers (e.g. 80 to 90).
+    # If the analyzer only tracks port numbers, it would see 11 unique ports and NOT alert.
+    # If it tracks (dport, protocol) pairs, it would see 22 unique port/protocol combinations and alert.
+    for i in range(11):
+        pkt_tcp = IP(src=scanner_ip, dst="192.168.1.1") / TCP(dport=80 + i)
+        pkt_tcp.time = i * 0.1
+        analyzer.process_packet(pkt_tcp)
+
+        pkt_udp = IP(src=scanner_ip, dst="192.168.1.1") / UDP(dport=80 + i)
+        pkt_udp.time = i * 0.1
+        analyzer.process_packet(pkt_udp)
+
+    assert len(analyzer.alerts) == 1, (
+        "Protocol distinction should count TCP and UDP on same port separately"
+    )
+
+
+def test_history_pruning_and_periodic_cleanup():
+    analyzer = NetworkAnalyzer(threshold=20, window=5.0)
+    scanner_ip = "192.168.1.10"
+
+    # Send packet from IP_A at t = 1.0
+    pkt_a = IP(src=scanner_ip, dst="192.168.1.1") / TCP(dport=80)
+    pkt_a.time = 1.0
+    analyzer.process_packet(pkt_a)
+    assert scanner_ip in analyzer.port_scan_history
+
+    # Now send 1000 packets from IP_B at t = 10.0.
+    # The periodic cleanup should run, and since IP_A is inactive, its key should be deleted.
+    for i in range(1000):
+        pkt_b = IP(src="192.168.1.20", dst="192.168.1.1") / TCP(dport=80)
+        pkt_b.time = 10.0
+        analyzer.process_packet(pkt_b)
+
+    assert scanner_ip not in analyzer.port_scan_history
+
