@@ -9,9 +9,17 @@ class NetworkAnalyzer:
     """
     Analyzes network packets for potential security events, such as port scans.
     """
-    def __init__(self, threshold: int = 20, window: float = 5.0) -> None:
+    def __init__(
+        self,
+        threshold: int = 20,
+        window: float = 5.0,
+        syn_flood_threshold: int = 100,
+        syn_flood_ratio: float = 10.0,
+    ) -> None:
         self.threshold: int = threshold
         self.window: float = window
+        self.syn_flood_threshold: int = syn_flood_threshold
+        self.syn_flood_ratio: float = syn_flood_ratio
         # Maps source IP to a list of (timestamp, (destination_port, protocol))
         self.port_scan_history: Dict[str, List[Tuple[float, Tuple[int, str]]]] = {}
         # Maps source IP to the last alert timestamp (float)
@@ -20,6 +28,11 @@ class NetworkAnalyzer:
         self.alerts: List[Dict[str, Any]] = []
         # Packet counter for periodic cleanup
         self.packet_count: int = 0
+        # SYN flood state tracking
+        self.syn_sent_count: Dict[str, int] = {}
+        self.syn_ack_received_count: Dict[str, int] = {}
+        self.syn_flood_alerted: set[str] = set()
+        self.last_packet_time: float = 0.0
 
     def process_packet(self, packet: Packet) -> None:
         """
@@ -29,6 +42,7 @@ class NetworkAnalyzer:
         packet_time: float = (
             float(packet.time) if packet.time is not None else time.time()
         )
+        self.last_packet_time = packet_time
 
         if self.packet_count % 1000 == 0:
             self._cleanup_history(packet_time)
@@ -36,6 +50,46 @@ class NetworkAnalyzer:
         if not (packet.haslayer(IP) or packet.haslayer(IPv6)):
             return
 
+        src_ip: str = (
+            packet[IP].src if packet.haslayer(IP) else packet[IPv6].src
+        )
+        dst_ip: str = (
+            packet[IP].dst if packet.haslayer(IP) else packet[IPv6].dst
+        )
+
+        # SYN Flood Detection
+        if packet.haslayer(TCP):
+            flags = str(packet[TCP].flags)
+            is_syn = "S" in flags and "A" not in flags
+            is_syn_ack = "S" in flags and "A" in flags
+
+            if is_syn:
+                self.syn_sent_count[src_ip] = self.syn_sent_count.get(src_ip, 0) + 1
+            elif is_syn_ack:
+                self.syn_ack_received_count[dst_ip] = self.syn_ack_received_count.get(dst_ip, 0) + 1
+
+            if src_ip in self.syn_sent_count and self.syn_sent_count[src_ip] >= self.syn_flood_threshold:
+                sent = self.syn_sent_count[src_ip]
+                received = self.syn_ack_received_count.get(src_ip, 0)
+                ratio = sent / max(1, received)
+                if ratio >= self.syn_flood_ratio:
+                    if src_ip not in self.syn_flood_alerted:
+                        self.syn_flood_alerted.add(src_ip)
+                        alert_msg = (
+                            f"SYN_FLOOD Alert: {src_ip} sent {sent} SYN packets "
+                            f"but received only {received} SYN-ACK packets"
+                        )
+                        print(alert_msg)
+                        self.alerts.append({
+                            "type": "SYN_FLOOD",
+                            "source_ip": src_ip,
+                            "timestamp": packet_time,
+                            "message": alert_msg,
+                            "syn_sent_count": sent,
+                            "syn_ack_received_count": received,
+                        })
+
+        # Port Scan Detection
         # Check for destination port in TCP/UDP layer
         dport = None
         proto = None
@@ -48,10 +102,6 @@ class NetworkAnalyzer:
 
         if dport is None:
             return
-
-        src_ip: str = (
-            packet[IP].src if packet.haslayer(IP) else packet[IPv6].src
-        )
 
         # Add connection to history
         if src_ip not in self.port_scan_history:
@@ -94,6 +144,32 @@ class NetworkAnalyzer:
                     "message": alert_msg,
                     "unique_ports_count": len(unique_ports)
                 })
+
+    def evaluate_syn_floods(self) -> None:
+        """
+        Evaluate any IPs that might have reached the SYN flood threshold by the end.
+        """
+        for ip, sent in list(self.syn_sent_count.items()):
+            if sent >= self.syn_flood_threshold:
+                received = self.syn_ack_received_count.get(ip, 0)
+                ratio = sent / max(1, received)
+                if ratio >= self.syn_flood_ratio:
+                    if ip not in self.syn_flood_alerted:
+                        self.syn_flood_alerted.add(ip)
+                        alert_msg = (
+                            f"SYN_FLOOD Alert: {ip} sent {sent} SYN packets "
+                            f"but received only {received} SYN-ACK packets"
+                        )
+                        print(alert_msg)
+                        alert_time = self.last_packet_time if self.last_packet_time > 0 else time.time()
+                        self.alerts.append({
+                            "type": "SYN_FLOOD",
+                            "source_ip": ip,
+                            "timestamp": alert_time,
+                            "message": alert_msg,
+                            "syn_sent_count": sent,
+                            "syn_ack_received_count": received,
+                        })
 
     def _cleanup_history(self, current_time: float) -> None:
         """

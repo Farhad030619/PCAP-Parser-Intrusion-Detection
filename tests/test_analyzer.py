@@ -194,3 +194,54 @@ def test_history_pruning_and_periodic_cleanup():
 
     assert scanner_ip not in analyzer.port_scan_history
 
+
+def test_syn_flood_detection():
+    # Instantiate analyzer with default threshold values
+    analyzer = NetworkAnalyzer()
+
+    # 1. Normal traffic: IP sends 50 SYN packets and receives 50 SYN-ACK packets
+    normal_ip = "192.168.1.100"
+    for i in range(50):
+        # IP sends SYN (TCP flag has 'S' but not 'A')
+        syn_pkt = IP(src=normal_ip, dst="192.168.1.1") / TCP(flags="S", dport=80)
+        syn_pkt.time = float(i)
+        analyzer.process_packet(syn_pkt)
+
+        # IP receives SYN-ACK (TCP flag has both 'S' and 'A')
+        syn_ack_pkt = IP(src="192.168.1.1", dst=normal_ip) / TCP(flags="SA", sport=80)
+        syn_ack_pkt.time = float(i) + 0.01
+        analyzer.process_packet(syn_ack_pkt)
+
+    # Evaluate at the end
+    analyzer.evaluate_syn_floods()
+
+    # Assert no alerts are raised
+    normal_alerts = [a for a in analyzer.alerts if a["source_ip"] == normal_ip and a["type"] == "SYN_FLOOD"]
+    assert len(normal_alerts) == 0, f"Expected no SYN_FLOOD alerts for normal IP, got: {normal_alerts}"
+
+    # 2. SYN Flood traffic: IP sends 120 SYN packets but receives only 2 SYN-ACK packets
+    flood_ip = "192.168.1.200"
+
+    # Send 120 SYN packets
+    for i in range(120):
+        syn_pkt = IP(src=flood_ip, dst="192.168.1.1") / TCP(flags="S", dport=80)
+        syn_pkt.time = 100.0 + float(i)
+        analyzer.process_packet(syn_pkt)
+
+    # Send 2 SYN-ACK packets received by flood_ip
+    for i in range(2):
+        syn_ack_pkt = IP(src="192.168.1.1", dst=flood_ip) / TCP(flags="SA", sport=80)
+        syn_ack_pkt.time = 100.0 + float(i) + 0.01
+        analyzer.process_packet(syn_ack_pkt)
+
+    # Evaluate at the end
+    analyzer.evaluate_syn_floods()
+
+    # Assert a "SYN_FLOOD" alert is triggered for this source IP
+    flood_alerts = [
+        a for a in analyzer.alerts
+        if a["source_ip"] == flood_ip and a["type"] == "SYN_FLOOD"
+    ]
+    assert len(flood_alerts) >= 1, "Expected SYN_FLOOD alert to be triggered for the flood IP"
+
+
