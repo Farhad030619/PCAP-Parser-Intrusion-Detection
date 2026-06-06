@@ -22,6 +22,40 @@ from src.analyzer import NetworkAnalyzer
 # Ensure static directory exists
 os.makedirs("src/static", exist_ok=True)
 
+# Load service definitions from JSON config
+def load_services_config() -> List[Dict[str, Any]]:
+    """Load monitored services from services.json config file."""
+    config_paths = [
+        os.path.join(os.path.dirname(__file__), '..', 'services.json'),
+        'services.json',
+    ]
+    for path in config_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            with open(abs_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data.get('services', [])
+    return []
+
+import logging
+
+SERVICE_CONFIG: List[Dict[str, Any]] = load_services_config()
+
+# Configure logging for Web UI alerts
+logger = logging.getLogger("ids_alerts_web")
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+
+try:
+    log_file_path = "ids_alerts.log"
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter("%(asctime)s - [ALERT] %(message)s")
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+except Exception as e:
+    print(f"Warning: Unable to initialize web UI alert log file: {e}")
+
 # State Management
 should_sniff: bool = False
 sniffer_thread: Optional[threading.Thread] = None
@@ -46,6 +80,13 @@ def handle_analyzer_alert(alert: Dict[str, Any]) -> None:
     """Format and broadcast threat alerts."""
     with lock:
         alerts.append(alert)
+    
+    # Log alert to file
+    try:
+        logger.info(alert["message"])
+    except Exception as e:
+        print(f"Error logging alert: {e}")
+
     if loop and active_connections:
         asyncio.run_coroutine_threadsafe(
             broadcast_message(alert),
@@ -78,18 +119,10 @@ def process_packet(packet: Any) -> None:
                     ip_addr = ip_addr.decode("utf-8", errors="ignore")
                 
                 service = None
-                if "tiktok" in domain or "byteoversea" in domain:
-                    service = "TikTok"
-                elif "youtube" in domain or "googlevideo" in domain:
-                    service = "YouTube"
-                elif "spotify" in domain:
-                    service = "Spotify"
-                elif "netflix" in domain or "nflx" in domain:
-                    service = "Netflix"
-                elif "github" in domain:
-                    service = "GitHub"
-                elif "google" in domain:
-                    service = "Google"
+                for svc in SERVICE_CONFIG:
+                    if any(keyword in domain for keyword in svc.get('domains', [])):
+                        service = svc['name']
+                        break
                 
                 if service:
                     with lock:
@@ -255,6 +288,12 @@ def api_get_alerts() -> dict:
 def api_get_hosts() -> dict:
     with lock:
         return {"hosts": list(active_hosts)}
+
+@app.get("/api/services")
+@app.get("/services")
+def api_get_services() -> dict:
+    """Return the loaded service configuration."""
+    return {"services": [s["name"] for s in SERVICE_CONFIG]}
 
 # WebSocket connection endpoint
 @app.websocket("/ws")

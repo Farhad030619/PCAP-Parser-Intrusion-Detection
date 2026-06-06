@@ -84,12 +84,12 @@ def test_serve_static_files(client):
     # Test fallback route serving index.html
     response = client.get("/")
     assert response.status_code == 200
-    assert "Antigravity IDS Dashboard" in response.text
+    assert "NetShield IDS Dashboard" in response.text
     
     # Test serving static files
     response = client.get("/static/index.html")
     assert response.status_code == 200
-    assert "Antigravity IDS Dashboard" in response.text
+    assert "NetShield IDS Dashboard" in response.text
 
 def test_lock_type():
     import threading
@@ -124,3 +124,41 @@ def test_reentrant_lock_prevents_deadlock():
     # while calling handle_analyzer_alert (which tried to acquire the lock again).
     is_alive = t.is_alive()
     assert not is_alive, "Deadlock occurred in process_packet during alert callback!"
+
+
+def test_alert_file_logging(tmp_path):
+    import logging
+    import src.web_ui
+    
+    # Temporarily redirect the log file path to a temp file
+    temp_log_file = tmp_path / "web_alerts.log"
+    original_handlers = list(src.web_ui.logger.handlers)
+    src.web_ui.logger.handlers.clear()
+    
+    # Configure logging to our temp file
+    file_handler = logging.FileHandler(str(temp_log_file))
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter("%(asctime)s - [ALERT] %(message)s")
+    file_handler.setFormatter(file_formatter)
+    src.web_ui.logger.addHandler(file_handler)
+    
+    try:
+        # Trigger an alert
+        alert = {
+            "type": "SYN_FLOOD",
+            "source_ip": "10.0.0.99",
+            "timestamp": 1234567.89,
+            "message": "SYN Flood: 10.0.0.99 sent 100 SYN packets with only 0 SYN-ACK replies"
+        }
+        src.web_ui.handle_analyzer_alert(alert)
+        
+        # Verify log file contents
+        assert temp_log_file.exists()
+        log_content = temp_log_file.read_text()
+        assert "SYN Flood: 10.0.0.99" in log_content
+    finally:
+        # Restore original handlers
+        src.web_ui.logger.handlers.clear()
+        for h in original_handlers:
+            src.web_ui.logger.addHandler(h)
+

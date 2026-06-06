@@ -4,6 +4,8 @@ import sys
 import pytest
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.layers.inet6 import IPv6
+from scapy.layers.l2 import ARP
+from scapy.layers.dns import DNS, DNSQR
 from scapy.utils import wrpcap
 from src.analyzer import NetworkAnalyzer
 
@@ -97,7 +99,7 @@ def test_pcap_parsing_integration(tmp_path):
     # Check log file contents
     assert log_file.exists(), "Log file was not created"
     log_content = log_file.read_text()
-    assert "SYN_FLOOD Alert:" in log_content
+    assert "SYN Flood:" in log_content
     # Timestamp should be in the log file
     current_year = str(datetime.datetime.now().year)
     assert current_year in log_content
@@ -163,3 +165,82 @@ def test_cli_invalid_log_dir(tmp_path):
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode == 1
     assert "unable to initialize log file" in result.stderr.lower() or "error" in result.stderr.lower()
+
+
+def test_arp_spoof_detection():
+    triggered_alerts = []
+
+    def log_alert(alert):
+        triggered_alerts.append(alert)
+
+    analyzer = NetworkAnalyzer(arp_spoof_enabled=True, on_alert=log_alert)
+
+    # 1. Register first IP-to-MAC mapping
+    pkt1 = ARP(op=2, psrc="192.168.1.5", hwsrc="00:11:22:33:44:55")
+    analyzer.process_packet(pkt1)
+    assert len(triggered_alerts) == 0
+
+    # 2. Register second IP-to-MAC mapping for the same IP (spoofing)
+    pkt2 = ARP(op=2, psrc="192.168.1.5", hwsrc="aa:bb:cc:dd:ee:ff")
+    analyzer.process_packet(pkt2)
+
+    assert len(triggered_alerts) == 1
+    assert triggered_alerts[0]["type"] == "ARP_SPOOF"
+    assert triggered_alerts[0]["source_ip"] == "192.168.1.5"
+    assert "00:11:22:33:44:55" in triggered_alerts[0]["mac_addresses"]
+    assert "aa:bb:cc:dd:ee:ff" in triggered_alerts[0]["mac_addresses"]
+
+
+def test_dns_tunneling_detection():
+    triggered_alerts = []
+
+    def log_alert(alert):
+        triggered_alerts.append(alert)
+
+    # Configure small thresholds for testing
+    analyzer = NetworkAnalyzer(
+        dns_tunnel_threshold=3,
+        dns_tunnel_min_length=20,
+        on_alert=log_alert
+    )
+
+    # Send 3 long DNS queries from same IP
+    src_ip = "192.168.1.50"
+    for i in range(3):
+        # build DNS packet with query name longer than min length (20)
+        qname = f"verylongsubdomainnametoexfiltratedata{i}.attacker.com"
+        pkt = IP(src=src_ip, dst="1.1.1.1") / UDP(sport=12345, dport=53) / DNS(qd=DNSQR(qname=qname))
+        pkt.time = 100.0 + i * 0.5
+        analyzer.process_packet(pkt)
+
+    assert len(triggered_alerts) == 1
+    assert triggered_alerts[0]["type"] == "DNS_TUNNEL"
+    assert triggered_alerts[0]["source_ip"] == src_ip
+    assert triggered_alerts[0]["query_count"] == 3
+
+
+def test_brute_force_detection():
+    triggered_alerts = []
+
+    def log_alert(alert):
+        triggered_alerts.append(alert)
+
+    # Configure threshold of 5 connections in 10s window
+    analyzer = NetworkAnalyzer(
+        brute_force_threshold=5,
+        brute_force_window=10.0,
+        on_alert=log_alert
+    )
+
+    src_ip = "192.168.1.75"
+    # Send 5 TCP SYN packets within 10s
+    for i in range(5):
+        pkt = IP(src=src_ip, dst="192.168.1.1") / TCP(flags="S", dport=80)
+        pkt.time = 100.0 + i * 1.0
+        analyzer.process_packet(pkt)
+
+    assert len(triggered_alerts) == 1
+    assert triggered_alerts[0]["type"] == "BRUTE_FORCE"
+    assert triggered_alerts[0]["source_ip"] == src_ip
+    assert triggered_alerts[0]["connection_count"] == 5
+

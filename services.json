@@ -1,0 +1,60 @@
+{
+    "services": [
+        {
+            "name": "TikTok",
+            "domains": ["tiktok", "byteoversea", "tiktokcdn", "musical.ly"]
+        },
+        {
+            "name": "YouTube",
+            "domains": ["youtube", "googlevideo", "ytimg", "yt3.ggpht"]
+        },
+        {
+            "name": "Spotify",
+            "domains": ["spotify", "scdn.co", "spotifycdn"]
+        },
+        {
+            "name": "Netflix",
+            "domains": ["netflix", "nflx", "nflxvideo"]
+        },
+        {
+            "name": "GitHub",
+            "domains": ["github", "githubusercontent", "githubassets"]
+        },
+        {
+            "name": "Google",
+            "domains": ["google", "googleapis", "gstatic", "1e100.net"]
+        },
+        {
+            "name": "Facebook",
+            "domains": ["facebook", "fbcdn", "fb.com", "fbsbx"]
+        },
+        {
+            "name": "Instagram",
+            "domains": ["instagram", "cdninstagram", "ig.me"]
+        },
+        {
+            "name": "Twitter/X",
+            "domains": ["twitter", "twimg", "x.com", "t.co"]
+        },
+        {
+            "name": "Snapchat",
+            "domains": ["snapchat", "snap-storage", "sc-cdn"]
+        },
+        {
+            "name": "Discord",
+            "domains": ["discord", "discordapp", "discordcdn"]
+        },
+        {
+            "name": "Reddit",
+            "domains": ["reddit", "redditmedia", "redditstatic"]
+        },
+        {
+            "name": "LinkedIn",
+            "domains": ["linkedin", "licdn", "linkedin.com"]
+        },
+        {
+            "name": "Telegram",
+            "domains": ["telegram", "t.me", "telegram.org", "tdesktop"]
+        }
+    ]
+}

@@ -16,17 +16,9 @@ let hostsCount = 0;
 const hostsMap = new Map(); // IP -> { element, count, status }
 let alertsCount = 0;
 let isSniffing = false;
+// Service Config — populated dynamically from traffic
+const services = new Map(); // serviceName -> { cardElement, packetCount }
 const serviceTimers = {};
-
-// Service Config
-const services = {
-    "TikTok": { cardId: "service-tiktok", packetCount: 0 },
-    "YouTube": { cardId: "service-youtube", packetCount: 0 },
-    "Spotify": { cardId: "service-spotify", packetCount: 0 },
-    "Netflix": { cardId: "service-netflix", packetCount: 0 },
-    "GitHub": { cardId: "service-github", packetCount: 0 },
-    "Google": { cardId: "service-google", packetCount: 0 }
-};
 
 // DOM Elements
 const selectInterface = document.getElementById("interface-select");
@@ -46,15 +38,21 @@ const alertLogs = document.getElementById("alert-logs");
 const packetStreamBody = document.getElementById("packet-stream-body");
 const hostsList = document.getElementById("hosts-list");
 
-const sliderPortThreshold = document.getElementById("slider-port-threshold");
-const sliderPortWindow = document.getElementById("slider-port-window");
 const sliderSynThreshold = document.getElementById("slider-syn-threshold");
 const sliderSynRatio = document.getElementById("slider-syn-ratio");
 
-const valPortThreshold = document.getElementById("val-port-threshold");
-const valPortWindow = document.getElementById("val-port-window");
 const valSynThreshold = document.getElementById("val-syn-threshold");
 const valSynRatio = document.getElementById("val-syn-ratio");
+
+// Mitigation Modal DOM Elements
+const mitigationModal = document.getElementById("mitigation-modal");
+const modalTitle = document.getElementById("modal-title");
+const modalType = document.getElementById("modal-type");
+const modalIp = document.getElementById("modal-ip");
+const modalSeverity = document.getElementById("modal-severity");
+const modalExplanation = document.getElementById("modal-explanation");
+const modalCommands = document.getElementById("modal-commands");
+const closeModal = document.querySelector(".close-modal");
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", init);
@@ -78,14 +76,6 @@ function setupEventListeners() {
     overlayDrawer.addEventListener("click", closeSettings);
     
     // Sliders input events for immediate display updates and throttling threshold sending
-    sliderPortThreshold.addEventListener("input", (e) => {
-        valPortThreshold.textContent = e.target.value;
-        sendThresholds();
-    });
-    sliderPortWindow.addEventListener("input", (e) => {
-        valPortWindow.textContent = parseFloat(e.target.value).toFixed(1) + "s";
-        sendThresholds();
-    });
     sliderSynThreshold.addEventListener("input", (e) => {
         valSynThreshold.textContent = e.target.value;
         sendThresholds();
@@ -94,6 +84,99 @@ function setupEventListeners() {
         valSynRatio.textContent = parseFloat(e.target.value).toFixed(1);
         sendThresholds();
     });
+
+    // Mitigation Modal Events
+    if (closeModal) {
+        closeModal.addEventListener("click", closeMitigationModal);
+    }
+    if (mitigationModal) {
+        mitigationModal.addEventListener("click", (e) => {
+            if (e.target === mitigationModal) {
+                closeMitigationModal();
+            }
+        });
+    }
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && mitigationModal && mitigationModal.classList.contains("visible")) {
+            closeMitigationModal();
+        }
+    });
+}
+
+function closeMitigationModal() {
+    if (mitigationModal) {
+        mitigationModal.classList.remove("visible");
+        setTimeout(() => {
+            if (!mitigationModal.classList.contains("visible")) {
+                mitigationModal.style.display = "";
+            }
+        }, 300);
+    }
+}
+
+function openMitigationModal(alert) {
+    if (!mitigationModal) return;
+    
+    // Threat intelligence database — known attack types
+    const knownThreats = {
+        "SYN_FLOOD": {
+            title: "SYN-Flood (DoS) Attack",
+            type: "SYN-Flood (Denial of Service)",
+            severity: "CRITICAL",
+            known: true,
+            explanation: "En SYN-Flood-attack försöker överbelasta din dator/server genom att skicka mängder av halva TCP-anslutningsförfrågningar (SYN-paket) utan att slutföra anslutningen. Detta gör att serverns anslutningskö fylls upp och legitima användare inte kan nå tjänsten.",
+            mitigation: (ip) => `# === macOS (pfctl) ===\necho "block in quick from ${ip} to any" | sudo pfctl -a custom.block -f -\n\n# === Linux (iptables) ===\nsudo iptables -A INPUT -s ${ip} -j DROP\n\n# === Verifiera blockering ===\n# macOS: sudo pfctl -a custom.block -sr\n# Linux: sudo iptables -L -n | grep ${ip}`
+        },
+        "ARP_SPOOF": {
+            title: "ARP-Spoofing (MitM) Detekterat",
+            type: "ARP-Spoofing (Man-in-the-Middle)",
+            severity: "HIGH",
+            known: true,
+            explanation: "En ARP-spoofing-attack sker när en angripare skickar falska ARP-meddelanden på det lokala nätverket. Detta gör att angriparens MAC-adress associeras med en legitim IP-adress (t.ex. routerns), vilket låter angriparen avlyssna eller manipulera din nätverkstrafik.",
+            mitigation: (ip) => `# Statisk ARP-mappning för skydd av gateway (macOS/Linux):\n# Hitta din routers IP och korrekta MAC, konfigurera dem statiskt:\nsudo arp -s <Gateway_IP> <Legitim_MAC>\n\n# Exempel:\n# sudo arp -s 192.168.1.1 00:11:22:33:44:55`
+        },
+        "DNS_TUNNEL": {
+            title: "DNS-Tunneling Detekterat",
+            type: "DNS-Tunneling (Dataexfiltrering)",
+            severity: "HIGH",
+            known: true,
+            explanation: "DNS-tunneling innebär att en angripare tunnlar godtycklig data (t.ex. känsliga filer eller fjärrstyrning) via DNS-protokollet. Det sker oftast genom att skicka många extremt långa subdomänförfrågningar till en extern namnserver kontrollerad av angriparen.",
+            mitigation: (ip) => `# === macOS (pfctl) ===\necho "block out quick to ${ip}" | sudo pfctl -a custom.block -f -\n\n# === Linux (iptables) ===\nsudo iptables -A OUTPUT -d ${ip} -p udp --dport 53 -j DROP\n\n# Blockera DNS-trafik till den misstänkta externa namnservern.`
+        },
+        "BRUTE_FORCE": {
+            title: "Brute-Force / Portskanning",
+            type: "Brute-Force Anslutningsförsök",
+            severity: "WARNING",
+            known: true,
+            explanation: "Systemet har upptäckt en stor mängd snabba och upprepade anslutningsförsök (TCP SYN) från denna käll-IP inom en kort tidsram. Detta kan tyda på ett brute-force-försök mot lokala tjänster (t.ex. SSH) eller en portskanning för att kartlägga öppna portar.",
+            mitigation: (ip) => `# === macOS (pfctl) ===\necho "block in quick from ${ip} to any" | sudo pfctl -a custom.block -f -\n\n# === Linux (iptables) ===\nsudo iptables -A INPUT -s ${ip} -j DROP`
+        }
+    };
+    
+    const threatInfo = knownThreats[alert.type] || null;
+    const ip = alert.source_ip || "<IP>";
+    
+    if (threatInfo) {
+        modalTitle.textContent = threatInfo.title;
+        modalType.innerHTML = `${escapeHTML(threatInfo.type)} <span class="known-threat-badge">Känt hot ✓</span>`;
+        modalSeverity.textContent = threatInfo.severity;
+        modalSeverity.className = "severity-badge severity-" + threatInfo.severity.toLowerCase();
+        modalExplanation.textContent = threatInfo.explanation;
+        modalCommands.textContent = threatInfo.mitigation(ip);
+    } else {
+        modalTitle.textContent = "Okänt hot detekterat";
+        modalType.innerHTML = `${escapeHTML(alert.type || "UNKNOWN")} <span class="unknown-threat-badge">Okänt hot</span>`;
+        modalSeverity.textContent = "WARNING";
+        modalSeverity.className = "severity-badge severity-warning";
+        modalExplanation.textContent = "Detta hot kunde inte identifieras automatiskt. Kontrollera loggarna noggrant och undersök IP-adressen.";
+        modalCommands.textContent = `# Blockera IP-adressen som försiktighetsåtgärd:\n# macOS: echo "block in quick from ${ip} to any" | sudo pfctl -a custom.block -f -\n# Linux: sudo iptables -A INPUT -s ${ip} -j DROP`;
+    }
+    
+    modalIp.textContent = ip;
+    
+    mitigationModal.style.display = "flex";
+    mitigationModal.offsetHeight; // force reflow
+    mitigationModal.classList.add("visible");
 }
 
 // Drawer handlers
@@ -224,7 +307,7 @@ function handleWSMessage(msg) {
     // Check if it's a direct packet or alert update
     if (msg.type === "packet") {
         processPacket(msg);
-    } else if (msg.type === "PORT_SCAN" || msg.type === "SYN_FLOOD") {
+    } else if (msg.type === "SYN_FLOOD") {
         processAlert(msg);
     } else if (msg.type === "alerts") {
         // Clear alerts placeholder and render current alert logs
@@ -290,7 +373,6 @@ function addPacketToStream(packet) {
     
     const protoClass = `proto-${escapeHTML((packet.proto || "other").toLowerCase())}`;
     const serviceName = packet.service || "";
-    const serviceClass = serviceName ? `service-lbl-${escapeHTML(serviceName.toLowerCase())}` : "";
     
     tr.innerHTML = `
         <td class="cell-time">${escapeHTML(timeStr)}</td>
@@ -298,7 +380,7 @@ function addPacketToStream(packet) {
         <td class="cell-ip">${escapeHTML(packet.dst || "N/A")}</td>
         <td><span class="cell-proto ${protoClass}">${escapeHTML(packet.proto || "OTHER")}</span></td>
         <td>${escapeHTML(packet.length || 0)} B</td>
-        <td class="cell-service ${serviceClass}">${escapeHTML(serviceName)}</td>
+        <td class="cell-service">${escapeHTML(serviceName)}</td>
     `;
     
     packetStreamBody.insertBefore(tr, packetStreamBody.firstChild);
@@ -370,41 +452,68 @@ function markHostSuspicious(ip) {
     }
 }
 
-// Trigger active state on Service Card
+// Create or update a service card dynamically
 function updateServiceCard(serviceName) {
-    const service = services[serviceName];
-    if (!service) return;
+    if (!serviceName) return;
     
-    service.packetCount++;
+    const servicesGrid = document.getElementById("services-grid");
+    if (!servicesGrid) return;
     
-    const card = document.getElementById(service.cardId);
-    if (!card) return;
+    // Remove placeholder on first service
+    const placeholder = document.getElementById("services-placeholder");
+    if (placeholder) placeholder.remove();
     
-    // Update counter
-    const numEl = card.querySelector(".counter-num");
-    if (numEl) numEl.textContent = service.packetCount.toLocaleString();
-    
-    // Add glowing class and toggle pill status
-    card.classList.add("active");
-    const statusPill = card.querySelector(".status-pill");
-    if (statusPill) {
-        statusPill.textContent = "Active";
-        statusPill.className = "status-pill status-active";
+    if (services.has(serviceName)) {
+        // Update existing
+        const svc = services.get(serviceName);
+        svc.packetCount++;
+        
+        const countEl = svc.cardElement.querySelector(".counter-num");
+        if (countEl) countEl.textContent = svc.packetCount.toLocaleString();
+        
+        // Pulse effect on activity
+        svc.cardElement.classList.add("active");
+        const indicator = svc.cardElement.querySelector(".activity-indicator");
+        if (indicator) indicator.className = "activity-indicator indicator-active";
+        
+        if (serviceTimers[serviceName]) clearTimeout(serviceTimers[serviceName]);
+        serviceTimers[serviceName] = setTimeout(() => {
+            svc.cardElement.classList.remove("active");
+            if (indicator) indicator.className = "activity-indicator indicator-idle";
+            delete serviceTimers[serviceName];
+        }, 3000);
+    } else {
+        // Create new card
+        const card = document.createElement("div");
+        card.className = "service-card active";
+        card.dataset.service = serviceName;
+        
+        card.innerHTML = `
+            <div class="service-row">
+                <span class="activity-indicator indicator-active"></span>
+                <span class="service-name">${escapeHTML(serviceName)}</span>
+            </div>
+            <div class="service-stats">
+                <span class="counter-num">1</span>
+                <span class="counter-lbl">packets</span>
+            </div>
+        `;
+        
+        servicesGrid.appendChild(card);
+        
+        services.set(serviceName, {
+            cardElement: card,
+            packetCount: 1
+        });
+        
+        // Set idle timer
+        serviceTimers[serviceName] = setTimeout(() => {
+            card.classList.remove("active");
+            const indicator = card.querySelector(".activity-indicator");
+            if (indicator) indicator.className = "activity-indicator indicator-idle";
+            delete serviceTimers[serviceName];
+        }, 3000);
     }
-    
-    // Reset timer to remove glow after 2 seconds of inactivity
-    if (serviceTimers[serviceName]) {
-        clearTimeout(serviceTimers[serviceName]);
-    }
-    
-    serviceTimers[serviceName] = setTimeout(() => {
-        card.classList.remove("active");
-        if (statusPill) {
-            statusPill.textContent = "Idle";
-            statusPill.className = "status-pill status-idle";
-        }
-        delete serviceTimers[serviceName];
-    }, 2000);
 }
 
 // Process incoming Alert
@@ -446,6 +555,10 @@ function addAlertToUI(alert, shouldFlash) {
         <div class="alert-ip">IP: ${escapeHTML(alert.source_ip)}</div>
         <div class="alert-detail">${escapeHTML(alert.message)}</div>
     `;
+    
+    alertDiv.addEventListener("click", () => {
+        openMitigationModal(alert);
+    });
     
     alertLogs.insertBefore(alertDiv, alertLogs.firstChild);
 
@@ -490,8 +603,6 @@ async function startSniffing() {
     
     const payload = {
         interface: selectedIface,
-        threshold: parseInt(sliderPortThreshold.value),
-        window: parseFloat(sliderPortWindow.value),
         syn_flood_threshold: parseInt(sliderSynThreshold.value),
         syn_flood_ratio: parseFloat(sliderSynRatio.value)
     };
@@ -547,8 +658,6 @@ function sendThresholds() {
     sendThresholdsTimeout = setTimeout(async () => {
         const payload = {
             interface: selectInterface.value,
-            threshold: parseInt(sliderPortThreshold.value),
-            window: parseFloat(sliderPortWindow.value),
             syn_flood_threshold: parseInt(sliderSynThreshold.value),
             syn_flood_ratio: parseFloat(sliderSynRatio.value)
         };

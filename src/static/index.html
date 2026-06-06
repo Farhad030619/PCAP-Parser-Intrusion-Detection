@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity IDS Dashboard</title>
+    <title>NetShield IDS Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -12,11 +12,7 @@
 <body>
     <header class="app-header">
         <div class="logo-area">
-            <svg class="logo-icon" viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                <polyline points="8 11 12 15 16 11"></polyline>
-            </svg>
-            <h1>Antigravity IDS Dashboard</h1>
+            <h1>NetShield IDS Dashboard</h1>
         </div>
 
         <div class="connection-status" id="connection-status">
@@ -97,111 +93,11 @@
             </div>
         </section>
 
-        <!-- Service Monitoring Grid -->
+        <!-- Service Monitoring -->
         <section class="services-section" aria-labelledby="services-heading">
             <h2 id="services-heading" class="section-title">Service Monitoring</h2>
-            <div class="services-grid">
-                <!-- TikTok Card -->
-                <div class="service-card" id="service-tiktok" data-service="TikTok">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon tiktok-logo">🎵</span>
-                            <h3>TikTok</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- YouTube Card -->
-                <div class="service-card" id="service-youtube" data-service="YouTube">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon youtube-logo">📺</span>
-                            <h3>YouTube</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Spotify Card -->
-                <div class="service-card" id="service-spotify" data-service="Spotify">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon spotify-logo">🟢</span>
-                            <h3>Spotify</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Netflix Card -->
-                <div class="service-card" id="service-netflix" data-service="Netflix">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon netflix-logo">🎬</span>
-                            <h3>Netflix</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- GitHub Card -->
-                <div class="service-card" id="service-github" data-service="GitHub">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon github-logo">🐙</span>
-                            <h3>GitHub</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Google Card -->
-                <div class="service-card" id="service-google" data-service="Google">
-                    <div class="service-header">
-                        <div class="service-brand">
-                            <span class="brand-icon google-logo">🔍</span>
-                            <h3>Google</h3>
-                        </div>
-                        <span class="status-pill status-idle">Idle</span>
-                    </div>
-                    <div class="service-body">
-                        <div class="packet-counter">
-                            <span class="counter-num">0</span>
-                            <span class="counter-lbl">packets</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="services-grid" id="services-grid">
+                <div class="placeholder-msg" id="services-placeholder">No service activity detected yet.</div>
             </div>
         </section>
 
@@ -273,25 +169,6 @@
         </div>
         <div class="drawer-body">
             <form id="settings-form" class="settings-form">
-                <!-- Port scan threshold -->
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="slider-port-threshold">Port Scan Threshold</label>
-                        <span class="setting-val" id="val-port-threshold">20</span>
-                    </div>
-                    <input type="range" id="slider-port-threshold" min="1" max="100" value="20" class="slider">
-                    <span class="setting-desc">Minimum unique ports scanned before triggering alert.</span>
-                </div>
-
-                <!-- Port scan window -->
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="slider-port-window">Port Scan Window (seconds)</label>
-                        <span class="setting-val" id="val-port-window">5.0s</span>
-                    </div>
-                    <input type="range" id="slider-port-window" min="1.0" max="30.0" step="0.5" value="5.0" class="slider">
-                    <span class="setting-desc">Time window in seconds to analyze port scan activity.</span>
-                </div>
 
                 <!-- SYN flood threshold -->
                 <div class="setting-group">
@@ -317,8 +194,24 @@
     </aside>
 
     <div class="drawer-overlay" id="drawer-overlay"></div>
-    <div id="alert-overlay"></div>
+    <!-- Mitigation Modal -->
+    <div id="mitigation-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2 id="modal-title">Threat Details</h2>
+            <div class="modal-body">
+                <p><strong>Typ av hot:</strong> <span id="modal-type"></span></p>
+                <p><strong>Käll-IP:</strong> <span id="modal-ip"></span></p>
+                <p><strong>Allvarlighetsgrad:</strong> <span id="modal-severity" class="severity-badge"></span></p>
+                <div id="modal-explanation"></div>
+                <h3>Rekommenderad Åtgärd (Brandväggs-blockering):</h3>
+                <p>Du kan blockera denna angripare genom att köra följande kommando i din terminal:</p>
+                <pre id="modal-commands"></pre>
+            </div>
+        </div>
+    </div>
 
+    <div id="alert-overlay"></div>
     <script src="/static/app.js"></script>
 </body>
 </html>

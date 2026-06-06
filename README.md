@@ -1,20 +1,24 @@
 # PCAP-Parser & Intrusion Detection System (IDS)
 
-Detta är ett Python-baserat Intrusion Detection System (IDS) och PCAP-analysverktyg för nätverkssäkerhet. Verktyget analyserar nätverkstrafik från en `.pcap`-fil för att upptäcka misstänkt aktivitet och genererar varningar (alerts) vid misstänkta mönster.
+Detta är ett Python-baserat Intrusion Detection System (IDS) och PCAP-analysverktyg för nätverkssäkerhet. Verktyget analyserar nätverkstrafik i realtid eller från en `.pcap`-fil för att upptäcka misstänkt aktivitet och genererar varningar (alerts) i en lokal loggfil samt på ett webb-dashboard.
 
 ---
 
 ## Översikt och Detektion
 
-Verktyget analyserar paket i realtid med hjälp av Scapy och kan upptäcka följande nätverkshot:
+Verktyget analyserar paket i realtid med hjälp av Scapy och har 4 specialiserade detektionsmotorer:
 
-1. **Portskanningar (Port Scans)**:
-   - Detekterar om en enskild käll-IP skannar flera unika destinationsportar (TCP eller UDP) inom ett definierat tidsfönster (sliding window).
-   - Inkluderar intelligent undertryckning (suppression/cooldown) av dubbla larm under tidsfönstret för att undvika loggspam.
-   
-2. **SYN-Flood DoS (Denial of Service)**:
-   - Detekterar om en enskild käll-IP skickar en stor mängd TCP SYN-paket men får orimligt få SYN-ACK-svar tillbaka (eller inga alls).
-   - Utvärderar både under analysens gång och i slutet för att identifiera attacker med hög precision baserat på tröskelvärden och kvoter (ratio).
+1. **SYN-Flood DoS (Denial of Service)**:
+   - Detekterar om en enskild käll-IP skickar en stor mängd TCP SYN-paket men får orimligt få SYN-ACK-svar tillbaka (eller inga alls), vilket tyder på ett överbelastningsförsök.
+
+2. **ARP-Spoofing (Man-in-the-Middle)**:
+   - Detekterar ARP-cacheförgiftning genom att övervaka och matcha IP- till MAC-adresser. Om en enskild IP-adress på nätverket plötsligt associeras med flera olika MAC-adresser i ARP-svar, flaggas detta omedelbart som en MitM-attack.
+
+3. **DNS-Tunneling (Dataexfiltrering)**:
+   - Identifierar dolda DNS-tunnlar genom att hålla reda på längden och frekvensen på DNS-frågor från käll-IP-adresser. Om en IP skickar många ovanligt långa DNS-förfrågningar (t.ex. subdomäner som innehåller krypterad data), utlöses ett larm.
+
+4. **Brute-Force & Portskanning (TCP Connections)**:
+   - Upptäcker snabba, upprepade anslutningsförsök (TCP SYN) från en enskild käll-IP inom ett glidande tidsfönster (t.ex. 20 anslutningar på 10 sekunder). Detta flaggar potentiella brute-force-försök eller portskanningar.
 
 ---
 
@@ -23,11 +27,13 @@ Verktyget analyserar paket i realtid med hjälp av Scapy och kan upptäcka följ
 Projektets filer är strukturerade på följande sätt:
 
 - **`src/`**
-  - **`analyzer.py`**: Innehåller klassen `NetworkAnalyzer` som sköter kärnlogiken för analys, tillståndsmaskiner för anslutningar, glidande tidsfönster och varningsgenerering.
-  - **`cli.py`**: Kommandoradsgränssnitt (CLI) som hanterar argument, sätter upp loggning och strömmar PCAP-filer till analysatorn.
+  - **`analyzer.py`**: Innehåller klassen `NetworkAnalyzer` som sköter kärnlogiken för de 4 detektionsmotorerna.
+  - **`web_ui.py`**: FastAPI-baserad webbserver och WebSocket-anslutning för visualisering i realtid. Spara även varningar i loggfilen.
+  - **`cli.py`**: Kommandoradsgränssnitt (CLI) som hanterar argument, sätter upp loggning och analyserar PCAP-filer eller kör live-sniffning.
 - **`tests/`**
-  - **`test_analyzer.py`**: Omfattande testsvit som verifierar detektionsregler, gränsvärden, rensning av historik och CLI-funktionalitet.
-- **`pyproject.toml` & `requirements.txt`**: Beroendehantering och projektkonfiguration.
+  - **`test_analyzer.py`**: Omfattande testsvit som verifierar de 4 detektionsreglerna, gränsvärden och CLI-funktionalitet.
+  - **`test_web.py`**: Verifierar webbserverns API:er, WebSocket-strömmar och trådsäkerhet.
+- **`services.json`**: Konfiguration av kända tjänster (t.ex. YouTube, Spotify, LinkedIn, Telegram) med matchande DNS-nyckelord.
 - **`WIRESHARK_GUIDE.md`**: Guide för att generera test-PCAP-filer med Wireshark, `nmap` och `hping3`.
 
 ---
@@ -46,13 +52,9 @@ För att köra verktyget lokalt behöver du Python 3.12+ installerat.
      ```bash
      source .venv/bin/activate
      ```
-   - På Windows (Command Prompt):
+   - På Windows:
      ```cmd
      .venv\Scripts\activate.bat
-     ```
-   - På Windows (PowerShell):
-     ```powershell
-     .venv\Scripts\Activate.ps1
      ```
 4. **Installera beroenden**:
    ```bash
@@ -61,12 +63,12 @@ För att köra verktyget lokalt behöver du Python 3.12+ installerat.
 
 ---
 
-## Användning
+## Användning (CLI)
 
-CLI-verktyget tar antingen en `.pcap`-fil eller ett live-gränssnitt som inmatning och erbjuder flexibla flaggor för att anpassa detektionskriterierna.
+CLI-verktyget tar antingen en `.pcap`-fil eller ett live-gränssnitt som inmatning och erbjuder flexibla flaggor.
 
 ### Grundläggande kommando (PCAP-fil)
-Kör skriptet med standardinställningar (skanningsgräns på 20 portar per 5.0 sekunder, syn-flood gräns på 100 SYN-paket med en kvot på 10.0):
+Kör skriptet med standardinställningar (skannar efter SYN-flood med tröskel på 100 SYN-paket och kvot på 10.0):
 
 ```bash
 python3 src/cli.py path/to/capture.pcap
@@ -88,19 +90,17 @@ sudo python3 src/cli.py --live
 sudo python3 src/cli.py --live -i en0
 ```
 
-### Anpassade tröskelvärden
-Du kan anpassa tröskelvärden, tidsfönster och utmatningsfil för larmen med hjälp av flaggor:
+### Anpassade inställningar
+Du kan anpassa tröskelvärden för SYN-flood samt utmatningsfil för larmen med hjälp av flaggor:
 
 ```bash
-python3 src/cli.py path/to/capture.pcap -t 20 -w 5.0 --syn-threshold 100 --syn-ratio 10.0 -o alerts.log
+python3 src/cli.py path/to/capture.pcap --syn-threshold 50 --syn-ratio 5.0 -o alerts.log
 ```
 
 #### Tillgängliga flaggor och parametrar:
 - `pcap_file` (Positionsparameter): Sökvägen till den PCAP-fil som ska analyseras (krävs ej om `--live` används).
 - `--live`: Sniffa nätverkstrafik live i realtid.
 - `-i`, `--interface`: Nätverksgränssnitt att sniffa på (t.ex. `eth0`, `en0`). Om det inte anges används systemets standardgränssnitt.
-- `-t`, `--port-threshold`: Antal unika destinationsportar som måste skannas inom fönstret för att utlösa en portskanning-varning (standard: `20`).
-- `-w`, `--port-window`: Det glidande tidsfönstret (i sekunder) för portskanning och tystnad (cooldown) (standard: `5.0`).
 - `--syn-threshold`: Minsta antal SYN-paket skickade av en IP för att betraktas som en SYN-flood (standard: `100`).
 - `--syn-ratio`: Minsta tillåtna förhållande (kvot) mellan skickade SYN-paket och mottagna SYN-ACK-paket för att utlösa larm (standard: `10.0`).
 - `-o`, `--output-log`: Sökvägen till loggfilen där varningar sparas (standard: `ids_alerts.log`).
@@ -136,26 +136,27 @@ När servern har startat kan du öppna gränssnittet i din webbläsare på:
 ### Funktioner i Dashboarden
 
 Visualiseringsverktyget erbjuder följande funktioner i realtid:
-* **Live-paketräknare**: Visar det totala antalet fångade nätverkspaket samt uppdelat per protokoll (TCP, UDP, övriga).
-* **Lysande tjänstekort (Service Cards)**: Färgkodade, lysande kort som visar aktivitet till och från populära tjänster (som TikTok, YouTube, Spotify, Netflix, GitHub och Google). Dessa uppdateras automatiskt när DNS-mappningar identifierar servrarna bakom respektive tjänst.
-* **Live-alarmlogg**: En realtidsuppdaterad logg med visuella varningar vid upptäckta portskanningar och SYN-floods, komplett med detaljer som IP-adresser, portar och felaktiga kvoter.
-* **Lista över aktiva värdar (Active Hosts)**: En lista som kontinuerligt uppdateras med alla IP-adresser som upptäckts i nätverkstrafiken.
-* **Skjutreglage i realtid (Settings Sliders)**: Möjliggör realtidsjustering av detektionsparametrar (portskanningströskel, tidsfönster, SYN-floodtröskel och SYN-kvot) direkt via webbgränssnittet.
+* **Live-paketräknare**: Visar det totala antalet bearbetade nätverkspaket.
+* **Tjänsteövervakning (Service Monitoring)**: Enkel och stilren lista som dynamiskt visar nätverksaktivitet för kända tjänster (t.ex. TikTok, YouTube, Spotify, LinkedIn, Telegram, etc.). Aktiviteten beräknas live genom DNS-mappning, och tjänster visas först när trafik detekteras.
+* **Live-alarmlogg**: Visar realtidsdetekterade hot (SYN-floods, ARP-spoofing, DNS-tunnling, brute-force) med detaljerad information om käll-IP och attackmönster. Genom att klicka på ett larm visas en modal som förklarar hotet samt ger konkreta brandväggskommandon (`iptables` / `pfctl`) för blockering.
+* **Aktivitetslista för värdar (Active Hosts)**: Visar upptäckta IP-adresser på nätverket och markerar omedelbart angripande värdar som "Suspicious".
+* **Inställningar i realtid (Settings Drawer)**: Möjliggör direkt justering av detektionskriterier via webbgränssnittet.
 
 ---
 
 ## Köra Tester
 
-Projektet har en komplett testsvit skriven i `pytest` för att säkerställa att analysatorn och CLI fungerar korrekt.
+Projektet har en komplett testsvit med 22 enhets- och integrationstester skriven i `pytest` för att säkerställa högsta kodkvalitet och korrekthet.
 
 Med aktiverad virtuell miljö, kör:
 
 ```bash
-pytest
+pytest -v
 ```
 
 Eller direkt via sökvägen till venv-pytest:
 
 ```bash
-.venv/bin/pytest
+./.venv/bin/pytest -v
 ```
+
