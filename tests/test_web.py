@@ -1,6 +1,5 @@
 import pytest
 import os
-import tempfile
 from fastapi.testclient import TestClient
 from scapy.layers.inet import IP, UDP
 from scapy.layers.dns import DNS, DNSRR, DNSQR
@@ -94,3 +93,37 @@ def test_serve_static_files(client):
     response = client.get("/static/index.html")
     assert response.status_code == 200
     assert "Test Dashboard" in response.text
+
+def test_lock_type():
+    import threading
+    from src.web_ui import lock
+    # Ensure it is an RLock (re-entrant lock)
+    assert isinstance(lock, threading._RLock) or type(lock).__name__ == "RLock"
+
+def test_reentrant_lock_prevents_deadlock():
+    import threading
+    import src.web_ui
+    from scapy.layers.inet import IP, TCP
+    
+    # Set up analyzer with a very low threshold so port scan is triggered on 2nd packet
+    src.web_ui.analyzer = NetworkAnalyzer(
+        threshold=1,
+        window=5.0,
+        on_alert=src.web_ui.handle_analyzer_alert
+    )
+    
+    pkt1 = IP(src="10.0.0.1", dst="10.0.0.2")/TCP(sport=12345, dport=80, flags="S")
+    pkt2 = IP(src="10.0.0.1", dst="10.0.0.2")/TCP(sport=12345, dport=443, flags="S")
+    
+    def run_process():
+        src.web_ui.process_packet(pkt1)
+        src.web_ui.process_packet(pkt2)
+
+    t = threading.Thread(target=run_process)
+    t.start()
+    t.join(timeout=2.0)
+    
+    # If the thread is still alive, it deadlocked because process_packet held the lock
+    # while calling handle_analyzer_alert (which tried to acquire the lock again).
+    is_alive = t.is_alive()
+    assert not is_alive, "Deadlock occurred in process_packet during alert callback!"

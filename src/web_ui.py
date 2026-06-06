@@ -29,7 +29,7 @@ active_hosts: Set[str] = set()
 alerts: List[Dict[str, Any]] = []
 active_connections: List[WebSocket] = []
 loop: Optional[asyncio.AbstractEventLoop] = None
-lock = threading.Lock()
+lock = threading.RLock()
 
 async def broadcast_message(message: dict) -> None:
     """Send a message to all active WebSockets."""
