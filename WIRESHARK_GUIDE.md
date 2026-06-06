@@ -101,3 +101,12 @@ Om du vill jämföra detektionsresultaten kan du köra en live-analys med IDS-ve
 3. Kör en simulering (t.ex. en portskanning med `nmap`).
 4. Du kommer att se larmen dyka upp i din terminal/loggfil i samma sekund som de sker, samtidigt som du i Wireshark kan se den exakta paketstrukturen för djupare analys.
 
+---
+
+## 6. Visualisering i Web-baserat Dashboard
+
+Om du föredrar ett visuellt och interaktivt gränssnitt framför terminalen kan du köra det medföljande **Web-baserade IDS-Dashboardet**. Genom att starta FastAPI-servern kan du spåra paketflöden i realtid, se statistik, visualisera anslutningar till kända tjänster och justera detektionsparametrar direkt i din webbläsare.
+
+För instruktioner om hur du startar och använder webbgränssnittet, se avsnittet [Web-baserat IDS-Dashboard i README.md](README.md#web-baserat-ids-dashboard).
+
+

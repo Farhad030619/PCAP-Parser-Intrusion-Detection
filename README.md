@@ -107,6 +107,43 @@ python3 src/cli.py path/to/capture.pcap -t 20 -w 5.0 --syn-threshold 100 --syn-r
 
 ---
 
+## Web-baserat IDS-Dashboard
+
+Verktyget innehåller även ett modernt, web-baserat användargränssnitt (Dashboard) byggt med FastAPI och WebSockets för realtidsvisualisering.
+
+### Starta Dashboard-servern
+
+Eftersom verktyget utför live-sniffning direkt från nätverkskortet krävs root-privilegier (`sudo`) på Unix-system för live-detektion. För att starta servern och använda den virtuella miljöns installerade beroenden, kör:
+
+```bash
+sudo ./.venv/bin/python3 src/web_ui.py
+```
+
+*(Om du har installerat beroendena globalt eller i ditt systems Python-miljö kan du köra med `sudo python3 src/web_ui.py`)*
+
+> [!NOTE]
+> Om du bara vill granska dashboardens layout, testa API:erna eller konfigurera inställningar utan att faktiskt starta den fysiska live-sniffningen (som kräver nätverkskortåtkomst), kan du köra servern helt utan `sudo`:
+> ```bash
+> python3 src/web_ui.py
+> ```
+
+### Öppna i Webbläsaren
+
+När servern har startat kan du öppna gränssnittet i din webbläsare på:
+
+[http://localhost:8000](http://localhost:8000)
+
+### Funktioner i Dashboarden
+
+Visualiseringsverktyget erbjuder följande funktioner i realtid:
+* **Live-paketräknare**: Visar det totala antalet fångade nätverkspaket samt uppdelat per protokoll (TCP, UDP, övriga).
+* **Lysande tjänstekort (Service Cards)**: Färgkodade, lysande kort som visar aktivitet till och från populära tjänster (som TikTok, YouTube, Spotify, Netflix, GitHub och Google). Dessa uppdateras automatiskt när DNS-mappningar identifierar servrarna bakom respektive tjänst.
+* **Live-alarmlogg**: En realtidsuppdaterad logg med visuella varningar vid upptäckta portskanningar och SYN-floods, komplett med detaljer som IP-adresser, portar och felaktiga kvoter.
+* **Lista över aktiva värdar (Active Hosts)**: En lista som kontinuerligt uppdateras med alla IP-adresser som upptäckts i nätverkstrafiken.
+* **Skjutreglage i realtid (Settings Sliders)**: Möjliggör realtidsjustering av detektionsparametrar (portskanningströskel, tidsfönster, SYN-floodtröskel och SYN-kvot) direkt via webbgränssnittet.
+
+---
+
 ## Köra Tester
 
 Projektet har en komplett testsvit skriven i `pytest` för att säkerställa att analysatorn och CLI fungerar korrekt.
