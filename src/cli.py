@@ -7,6 +7,7 @@ from typing import Dict, Any
 # Ensure parent directory of 'src' is in sys.path to support 'import src.analyzer' when executed directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from scapy.all import sniff
 from scapy.utils import PcapReader
 from src.analyzer import NetworkAnalyzer
 
@@ -18,7 +19,18 @@ def main() -> None:
     )
     parser.add_argument(
         "pcap_file",
+        nargs="?",
         help="Path to the PCAP file to analyze"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Sniff network traffic live in real-time"
+    )
+    parser.add_argument(
+        "-i",
+        "--interface",
+        help="Network interface to sniff on (e.g. eth0, en0)"
     )
     parser.add_argument(
         "-t",
@@ -55,6 +67,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Verify input source constraints
+    if not args.pcap_file and not args.live:
+        print("Error: Either a PCAP file or the --live flag must be specified.", file=sys.stderr)
+        sys.exit(1)
+    if args.pcap_file and args.live:
+        print("Error: Cannot specify both a PCAP file and --live mode.", file=sys.stderr)
+        sys.exit(1)
+
     # Set up logging to console and to file
     logger = logging.getLogger("ids_alerts")
     logger.setLevel(logging.INFO)
@@ -90,30 +110,33 @@ def main() -> None:
         on_alert=log_alert,
     )
 
-    print(f"\033[96mAnalyzing PCAP file: {args.pcap_file}...\033[0m")
-
-    packet_count = 0
-
-    try:
-        with PcapReader(args.pcap_file) as reader:
-            for packet in reader:
-                analyzer.process_packet(packet)
-                packet_count += 1
-
-                if packet_count % 1000 == 0:
-                    print(f"\033[96mProcessed {packet_count} packets...\033[0m")
-
-    except FileNotFoundError:
-        print(f"Error: File '{args.pcap_file}' not found.", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error reading/parsing PCAP file: {e}", file=sys.stderr)
-        sys.exit(1)
+    if args.live:
+        iface_desc = args.interface if args.interface else "default interface"
+        print(f"\033[96mStarting live network sniffing... (Press Ctrl+C to stop) on {iface_desc}\033[0m")
+        try:
+            sniff(iface=args.interface, prn=analyzer.process_packet, store=False)
+        except KeyboardInterrupt:
+            print("\n\033[92mStopping live sniffing...\033[0m")
+    else:
+        print(f"\033[96mAnalyzing PCAP file: {args.pcap_file}...\033[0m")
+        try:
+            with PcapReader(args.pcap_file) as reader:
+                for packet in reader:
+                    analyzer.process_packet(packet)
+                    if analyzer.packet_count % 1000 == 0:
+                        print(f"\033[96mProcessed {analyzer.packet_count} packets...\033[0m")
+        except FileNotFoundError:
+            print(f"Error: File '{args.pcap_file}' not found.", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error reading/parsing PCAP file: {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Perform final evaluation for SYN floods
     analyzer.evaluate_syn_floods()
 
     # Print final summary in Green
+    packet_count = analyzer.packet_count
     total_alerts = len(analyzer.alerts)
     summary = (
         f"Analysis completed. {total_alerts} alerts written to {args.output_log}\n"
