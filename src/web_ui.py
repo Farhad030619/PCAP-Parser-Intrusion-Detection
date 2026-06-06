@@ -15,6 +15,8 @@ from scapy.layers.dns import DNS, DNSRR
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.layers.inet6 import IPv6
 
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.analyzer import NetworkAnalyzer
 
 # Ensure static directory exists
