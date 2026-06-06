@@ -1,3 +1,14 @@
+// Helper for XSS escaping
+function escapeHTML(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // Global State
 let ws = null;
 let packetCount = 0;
@@ -277,17 +288,17 @@ function addPacketToStream(packet) {
     const packetTime = packet.time ? new Date(packet.time * 1000) : new Date();
     const timeStr = packetTime.toLocaleTimeString() + "." + String(packetTime.getMilliseconds()).padStart(3, '0');
     
-    const protoClass = `proto-${(packet.proto || "other").toLowerCase()}`;
+    const protoClass = `proto-${escapeHTML((packet.proto || "other").toLowerCase())}`;
     const serviceName = packet.service || "";
-    const serviceClass = serviceName ? `service-lbl-${serviceName.toLowerCase()}` : "";
+    const serviceClass = serviceName ? `service-lbl-${escapeHTML(serviceName.toLowerCase())}` : "";
     
     tr.innerHTML = `
-        <td class="cell-time">${timeStr}</td>
-        <td class="cell-ip">${packet.src || "N/A"}</td>
-        <td class="cell-ip">${packet.dst || "N/A"}</td>
-        <td><span class="cell-proto ${protoClass}">${packet.proto || "OTHER"}</span></td>
-        <td>${packet.length || 0} B</td>
-        <td class="cell-service ${serviceClass}">${serviceName}</td>
+        <td class="cell-time">${escapeHTML(timeStr)}</td>
+        <td class="cell-ip">${escapeHTML(packet.src || "N/A")}</td>
+        <td class="cell-ip">${escapeHTML(packet.dst || "N/A")}</td>
+        <td><span class="cell-proto ${protoClass}">${escapeHTML(packet.proto || "OTHER")}</span></td>
+        <td>${escapeHTML(packet.length || 0)} B</td>
+        <td class="cell-service ${serviceClass}">${escapeHTML(serviceName)}</td>
     `;
     
     packetStreamBody.insertBefore(tr, packetStreamBody.firstChild);
@@ -322,8 +333,8 @@ function addOrUpdateHost(ip, incrementBy = 1) {
         
         li.innerHTML = `
             <div class="host-info">
-                <span class="host-ip">${ip}</span>
-                <span class="host-stats"><span class="host-packet-count">${incrementBy}</span> packets</span>
+                <span class="host-ip">${escapeHTML(ip)}</span>
+                <span class="host-stats"><span class="host-packet-count">${escapeHTML(incrementBy)}</span> packets</span>
             </div>
             <span class="host-badge-status status-safe">Safe</span>
         `;
@@ -398,18 +409,15 @@ function updateServiceCard(serviceName) {
 
 // Process incoming Alert
 function processAlert(alert) {
-    // 1. Play visual flash effect
-    triggerVisualAlert();
-    
-    // 2. Prepend alert card
+    // 1. Prepend alert card (triggers visual flash if shouldFlash is true)
     addAlertToUI(alert, true);
     
-    // 3. Increment counters
+    // 2. Increment counters
     alertsCount++;
     valAlerts.textContent = alertsCount;
     valAlertBadgeCount.textContent = alertsCount;
     
-    // 4. Mark source IP as suspicious in Hosts list
+    // 3. Mark source IP as suspicious in Hosts list
     if (alert.source_ip) {
         markHostSuspicious(alert.source_ip);
     }
@@ -432,24 +440,28 @@ function addAlertToUI(alert, shouldFlash) {
     
     alertDiv.innerHTML = `
         <div class="alert-header">
-            <span class="alert-type">${alert.type}</span>
-            <span class="alert-time">${timeStr}</span>
+            <span class="alert-type">${escapeHTML(alert.type)}</span>
+            <span class="alert-time">${escapeHTML(timeStr)}</span>
         </div>
-        <div class="alert-ip">IP: ${alert.source_ip}</div>
-        <div class="alert-detail">${alert.message}</div>
+        <div class="alert-ip">IP: ${escapeHTML(alert.source_ip)}</div>
+        <div class="alert-detail">${escapeHTML(alert.message)}</div>
     `;
     
     alertLogs.insertBefore(alertDiv, alertLogs.firstChild);
+
+    if (shouldFlash) {
+        triggerVisualAlert();
+    }
 }
 
-// Trigger body flashing visual cue
+// Trigger screen flash visual cue using alert overlay element
 function triggerVisualAlert() {
-    document.body.classList.remove("alarm-flash");
-    void document.body.offsetWidth; // Force Reflow
-    document.body.classList.add("alarm-flash");
+    const overlay = document.getElementById("alert-overlay");
+    if (!overlay) return;
+    overlay.classList.add("active");
     
     setTimeout(() => {
-        document.body.classList.remove("alarm-flash");
+        overlay.classList.remove("active");
     }, 400);
 }
 
