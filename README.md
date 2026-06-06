@@ -63,13 +63,29 @@ För att köra verktyget lokalt behöver du Python 3.12+ installerat.
 
 ## Användning
 
-CLI-verktyget tar en `.pcap`-fil som inmatning och erbjuder flexibla flaggor för att anpassa detektionskriterierna.
+CLI-verktyget tar antingen en `.pcap`-fil eller ett live-gränssnitt som inmatning och erbjuder flexibla flaggor för att anpassa detektionskriterierna.
 
-### Grundläggande kommando
+### Grundläggande kommando (PCAP-fil)
 Kör skriptet med standardinställningar (skanningsgräns på 20 portar per 5.0 sekunder, syn-flood gräns på 100 SYN-paket med en kvot på 10.0):
 
 ```bash
 python3 src/cli.py path/to/capture.pcap
+```
+
+### Live-sniffning i realtid (Live Sniffing)
+Verktyget kan även sniffa nätverkstrafik direkt i realtid från ett nätverksgränssnitt. 
+
+> [!IMPORTANT]
+> Live-sniffning kräver root-privilegier (administratörsrättigheter via `sudo`) på macOS och Linux för att kunna läsa rå nätverkstrafik direkt från nätverksgränssnittet.
+
+**Exempel på live-sniffning på standardgränssnittet:**
+```bash
+sudo python3 src/cli.py --live
+```
+
+**Exempel på live-sniffning på ett specifikt gränssnitt (t.ex. `en0`):**
+```bash
+sudo python3 src/cli.py --live -i en0
 ```
 
 ### Anpassade tröskelvärden
@@ -80,7 +96,9 @@ python3 src/cli.py path/to/capture.pcap -t 20 -w 5.0 --syn-threshold 100 --syn-r
 ```
 
 #### Tillgängliga flaggor och parametrar:
-- `pcap_file` (Positionsparameter): Sökvägen till den PCAP-fil som ska analyseras.
+- `pcap_file` (Positionsparameter): Sökvägen till den PCAP-fil som ska analyseras (krävs ej om `--live` används).
+- `--live`: Sniffa nätverkstrafik live i realtid.
+- `-i`, `--interface`: Nätverksgränssnitt att sniffa på (t.ex. `eth0`, `en0`). Om det inte anges används systemets standardgränssnitt.
 - `-t`, `--port-threshold`: Antal unika destinationsportar som måste skannas inom fönstret för att utlösa en portskanning-varning (standard: `20`).
 - `-w`, `--port-window`: Det glidande tidsfönstret (i sekunder) för portskanning och tystnad (cooldown) (standard: `5.0`).
 - `--syn-threshold`: Minsta antal SYN-paket skickade av en IP för att betraktas som en SYN-flood (standard: `100`).

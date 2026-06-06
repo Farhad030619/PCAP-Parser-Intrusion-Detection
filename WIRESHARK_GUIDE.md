@@ -71,3 +71,33 @@ När du har utfört simuleringarna ovan är det dags att spara den inspelade tra
 4. **Ange Filnamn**: Spara filen som exempelvis `capture.pcap` i din projektkatalog eller valfri lämplig sökväg.
 
 Nu är din test-PCAP-fil redo att analyseras med hjälp av CLI-verktyget!
+
+---
+
+## 5. Wireshark-fångst vs. Live-detektion med IDS-verktyget
+
+Tidigare krävdes det att du först spelade in nätverkstrafiken i Wireshark, sparade den som en `.pcap`-fil och därefter körde analysverktyget mot filen. 
+
+Nu har IDS-verktyget stöd för **live intrusion detection**. Det innebär att du kan strömma nätverkstrafik direkt till detektionsmotorn i realtid utan att gå omvägen via Wireshark eller spara filer på disken.
+
+Här är en jämförelse mellan de två tillvägagångssätten:
+
+| Egenskap | Capturing i Wireshark + PCAP-analys | Live IDS-detektion |
+| :--- | :--- | :--- |
+| **Arbetsflöde** | Spara trafik till fil -> Analysera filen i efterhand (offline-analys). | Analysera nätverkspaket direkt när de passerar nätverkskortet (realtidsanalys). |
+| **Resursförbrukning** | Kan kräva stort diskutrymme för att lagra `.pcap`-filer vid långvariga mätningar. | Mycket lågt diskutrymme då paket analyseras i minnet och inte sparas på disk (endast larm loggas). |
+| **Användningsområde** | Perfekt för djupgående forensisk analys, felsökning och arkivering av historisk trafik. | Perfekt för kontinuerlig övervakning, omedelbar larmning vid pågående attacker och resurssnåla installationer. |
+| **Krav på behörighet** | Kräver administratörsrättigheter för Wireshark vid inspelning, men inte för efterföljande PCAP-analys. | Kräver administratörsrättigheter (`sudo`) för att IDS-verktyget ska kunna binda till nätverkskortet live. |
+
+### Hur du kör verktygen sida vid sida för testning
+
+Om du vill jämföra detektionsresultaten kan du köra en live-analys med IDS-verktyget samtidigt som du spelar in trafiken i Wireshark:
+
+1. Starta IDS-verktyget i live-läge i en terminal:
+   ```bash
+   sudo python3 src/cli.py --live -i <gränssnitt>
+   ```
+2. Starta en inspelning i Wireshark på samma gränssnitt.
+3. Kör en simulering (t.ex. en portskanning med `nmap`).
+4. Du kommer att se larmen dyka upp i din terminal/loggfil i samma sekund som de sker, samtidigt som du i Wireshark kan se den exakta paketstrukturen för djupare analys.
+
