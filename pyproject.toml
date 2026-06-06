@@ -1,0 +1,17 @@
+[project]
+name = "pcap-ids-tool"
+version = "0.1.0"
+description = "A PCAP-Parser & Intrusion Detection Script"
+requires-python = ">=3.12"
+dependencies = [
+    "scapy>=2.6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
