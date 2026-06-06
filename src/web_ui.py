@@ -152,8 +152,6 @@ def process_packet(packet: Any) -> None:
 
 def start_sniff_logic(
     interface: str,
-    threshold: int = 20,
-    window: float = 5.0,
     syn_flood_threshold: int = 100,
     syn_flood_ratio: float = 10.0
 ) -> str:
@@ -162,16 +160,12 @@ def start_sniff_logic(
     with lock:
         if should_sniff:
             if analyzer:
-                analyzer.threshold = threshold
-                analyzer.window = window
                 analyzer.syn_flood_threshold = syn_flood_threshold
                 analyzer.syn_flood_ratio = syn_flood_ratio
             return "already running"
         
         should_sniff = True
         analyzer = NetworkAnalyzer(
-            threshold=threshold,
-            window=window,
             syn_flood_threshold=syn_flood_threshold,
             syn_flood_ratio=syn_flood_ratio,
             on_alert=handle_analyzer_alert
@@ -211,8 +205,6 @@ def stop_sniff_logic() -> str:
 # Pydantic schema for start endpoint
 class StartRequest(BaseModel):
     interface: str
-    threshold: Optional[int] = 20
-    window: Optional[float] = 5.0
     syn_flood_threshold: Optional[int] = 100
     syn_flood_ratio: Optional[float] = 10.0
 
@@ -237,8 +229,6 @@ def api_get_interfaces() -> dict:
 def api_start_sniffing(req: StartRequest) -> dict:
     status = start_sniff_logic(
         interface=req.interface,
-        threshold=req.threshold if req.threshold is not None else 20,
-        window=req.window if req.window is not None else 5.0,
         syn_flood_threshold=req.syn_flood_threshold if req.syn_flood_threshold is not None else 100,
         syn_flood_ratio=req.syn_flood_ratio if req.syn_flood_ratio is not None else 10.0
     )
@@ -288,15 +278,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                 elif action == "start":
                     iface = msg.get("interface")
-                    threshold = msg.get("threshold", 20)
-                    window = msg.get("window", 5.0)
                     syn_flood_threshold = msg.get("syn_flood_threshold", 100)
                     syn_flood_ratio = msg.get("syn_flood_ratio", 10.0)
                     
                     status = start_sniff_logic(
                         interface=iface,
-                        threshold=threshold,
-                        window=window,
                         syn_flood_threshold=syn_flood_threshold,
                         syn_flood_ratio=syn_flood_ratio
                     )

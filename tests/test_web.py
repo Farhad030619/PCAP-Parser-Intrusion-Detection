@@ -25,11 +25,8 @@ def test_get_interfaces(client):
 
 def test_start_stop_sniffing(client):
     # Ensure starting sniffing returns correct status
-    # We can post thresholds
     payload = {
         "interface": "lo0",
-        "threshold": 15,
-        "window": 10.0,
         "syn_flood_threshold": 50,
         "syn_flood_ratio": 5.0
     }
@@ -105,10 +102,10 @@ def test_reentrant_lock_prevents_deadlock():
     import src.web_ui
     from scapy.layers.inet import IP, TCP
     
-    # Set up analyzer with a very low threshold so port scan is triggered on 2nd packet
+    # Set up analyzer with a low SYN flood threshold to trigger alert on 2nd packet
     src.web_ui.analyzer = NetworkAnalyzer(
-        threshold=1,
-        window=5.0,
+        syn_flood_threshold=2,
+        syn_flood_ratio=1.0,
         on_alert=src.web_ui.handle_analyzer_alert
     )
     

@@ -33,20 +33,6 @@ def main() -> None:
         help="Network interface to sniff on (e.g. eth0, en0)"
     )
     parser.add_argument(
-        "-t",
-        "--port-threshold",
-        type=int,
-        default=20,
-        help="Unique destination ports scanned within the window to trigger port scan alert"
-    )
-    parser.add_argument(
-        "-w",
-        "--port-window",
-        type=float,
-        default=5.0,
-        help="Sliding window in seconds for port scan and suppression"
-    )
-    parser.add_argument(
         "--syn-threshold",
         type=int,
         default=100,
@@ -103,8 +89,6 @@ def main() -> None:
 
     # Initialize analyzer
     analyzer = NetworkAnalyzer(
-        threshold=args.port_threshold,
-        window=args.port_window,
         syn_flood_threshold=args.syn_threshold,
         syn_flood_ratio=args.syn_ratio,
         on_alert=log_alert,
