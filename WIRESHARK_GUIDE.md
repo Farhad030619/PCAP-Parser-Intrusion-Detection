@@ -13,7 +13,7 @@ För att spela in nätverkstrafik behöver du ha Wireshark installerat på din m
    - Välj det gränssnitt som du ska använda för att skicka eller ta emot trafiken (t.ex. `Wi-Fi` eller `Ethernet`).
    - Om du testar lokalt mot din egen maskin (localhost), välj `Loopback` (ofta kallat `lo` eller `Adapter for loopback traffic capture` på Windows).
 3. **Starta Fångsten (Capture)**:
-   - Dubbelklicka på gränssnittet eller klicka på den **blå fenan** i det övre växstra hörnet för att börja spela in paket i realtid.
+   - Dubbelklicka på gränssnittet eller klicka på den **blå fenan** i det övre västra hörnet för att börja spela in paket i realtid.
 
 ---
 
@@ -21,13 +21,16 @@ För att spela in nätverkstrafik behöver du ha Wireshark installerat på din m
 
 En portskanning utförs för att identifiera öppna portar på en måldator. Detektionen triggas om en och samma käll-IP skannar fler unika destinationsportar än tröskelvärdet (standard: 20 unika portar) inom ett tidsfönster (standard: 5 sekunder).
 
+> [!NOTE]
+> Både `nmap` (vid användning av flaggor som `-sS` eller `-sU` för att skicka råa TCP/UDP-paket) och `hping3` kräver administratörsbehörighet (`sudo` / root-privilegier) för att kunna skapa och skicka råa nätverkspaket.
+
 För att simulera detta, öppna en terminal och kör följande kommando:
 
 ```bash
 # Ersätt <IP> med din måldators IP-adress (t.ex. 127.0.0.1 för loopback)
 # Flaggan -sS utför en TCP SYN-skanning (halvöppen skanning)
 # Flaggan -p 1-1000 anger portintervallet 1 till 1000
-nmap -sS -p 1-1000 <IP>
+sudo nmap -sS -p 1-1000 <IP>
 ```
 
 > [!TIP]
@@ -57,7 +60,7 @@ sudo hping3 -S -p 80 --flood <IP>
 
 ## 4. Spara Trafiken som en `.pcap`-fil i Wireshark
 
-När du har utfört simuleringarna ovan är det dags att spara den inspelade trafiken så dat IDS-skriptet kan analysera den.
+När du har utfört simuleringarna ovan är det dags att spara den inspelade trafiken så att IDS-skriptet kan analysera den.
 
 1. **Stoppa Fångsten**: Klicka på den röda stoppknappen (fyrkanten) i Wireshark.
 2. **Spara filen**:
