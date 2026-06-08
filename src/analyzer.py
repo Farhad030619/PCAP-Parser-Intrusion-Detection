@@ -9,15 +9,6 @@ from scapy.packet import Packet
 
 
 class NetworkAnalyzer:
-    """
-    Analyzes network packets for potential security threats.
-
-    Supported detections:
-        - SYN Flood (DoS)
-        - ARP Spoofing (MitM)
-        - DNS Tunneling (data exfiltration)
-        - Brute-Force / Port Scan (many connections from single source)
-    """
     def __init__(
         self,
         syn_flood_threshold: int = 100,
@@ -29,76 +20,65 @@ class NetworkAnalyzer:
         brute_force_window: float = 10.0,
         on_alert: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
-        self.syn_flood_threshold: int = syn_flood_threshold
-        self.syn_flood_ratio: float = syn_flood_ratio
-        self.arp_spoof_enabled: bool = arp_spoof_enabled
-        self.dns_tunnel_threshold: int = dns_tunnel_threshold
-        self.dns_tunnel_min_length: int = dns_tunnel_min_length
-        self.brute_force_threshold: int = brute_force_threshold
-        self.brute_force_window: float = brute_force_window
-        self.on_alert: Optional[Callable[[Dict[str, Any]], None]] = on_alert
+        self.syn_flood_threshold = syn_flood_threshold
+        self.syn_flood_ratio = syn_flood_ratio
+        self.arp_spoof_enabled = arp_spoof_enabled
+        self.dns_tunnel_threshold = dns_tunnel_threshold
+        self.dns_tunnel_min_length = dns_tunnel_min_length
+        self.brute_force_threshold = brute_force_threshold
+        self.brute_force_window = brute_force_window
+        self.on_alert = on_alert
 
-        # General state
         self.alerts: List[Dict[str, Any]] = []
         self.packet_count: int = 0
         self.last_packet_time: float = 0.0
 
-        # SYN flood tracking
         self.syn_sent_count: Dict[str, int] = {}
         self.syn_ack_received_count: Dict[str, int] = {}
         self.syn_flood_alerted: Set[str] = set()
 
-        # ARP spoofing tracking: IP -> set of MACs seen
         self.arp_table: Dict[str, Set[str]] = defaultdict(set)
         self.arp_spoof_alerted: Set[str] = set()
 
-        # DNS tunneling tracking: source_ip -> list of query lengths
         self.dns_query_tracker: Dict[str, List[int]] = defaultdict(list)
         self.dns_tunnel_alerted: Set[str] = set()
 
-        # Brute-force tracking: source_ip -> list of (timestamp, dst_port) tuples
         self.connection_tracker: Dict[str, List[float]] = defaultdict(list)
         self.brute_force_alerted: Set[str] = set()
 
     def _emit_alert(self, alert: Dict[str, Any]) -> None:
-        """Append alert to internal list and invoke the callback if set."""
         self.alerts.append(alert)
         if self.on_alert is not None:
             self.on_alert(alert)
 
     def process_packet(self, packet: Packet) -> None:
-        """Process a single packet through all detection engines."""
         self.packet_count += 1
-        packet_time: float = (
+        packet_time = (
             float(packet.time) if packet.time is not None else time.time()
         )
         self.last_packet_time = packet_time
 
-        # ARP Spoofing Detection (Layer 2 — runs before IP check)
         if self.arp_spoof_enabled and packet.haslayer(ARP):
             self._check_arp_spoof(packet, packet_time)
 
         if not (packet.haslayer(IP) or packet.haslayer(IPv6)):
             return
 
-        src_ip: str = (
+        src_ip = (
             packet[IP].src if packet.haslayer(IP) else packet[IPv6].src
         )
-        dst_ip: str = (
+        dst_ip = (
             packet[IP].dst if packet.haslayer(IP) else packet[IPv6].dst
         )
 
-        # SYN Flood Detection
         if packet.haslayer(TCP):
             self._check_syn_flood(packet, src_ip, dst_ip, packet_time)
             self._check_brute_force(packet, src_ip, packet_time)
 
-        # DNS Tunneling Detection
         if packet.haslayer(UDP) and packet.haslayer(DNS):
             self._check_dns_tunnel(packet, src_ip, packet_time)
 
     def _check_syn_flood(self, packet: Packet, src_ip: str, dst_ip: str, packet_time: float) -> None:
-        """Detect SYN flood attacks based on SYN/ACK ratio."""
         flags = str(packet[TCP].flags)
         is_syn = "S" in flags and "A" not in flags
         is_syn_ack = "S" in flags and "A" in flags
@@ -128,9 +108,7 @@ class NetworkAnalyzer:
                     })
 
     def _check_arp_spoof(self, packet: Packet, packet_time: float) -> None:
-        """Detect ARP spoofing by tracking IP-to-MAC mappings."""
         arp = packet[ARP]
-        # op=2 means ARP reply (is-at)
         if arp.op == 2:
             sender_ip = arp.psrc
             sender_mac = arp.hwsrc
@@ -152,7 +130,6 @@ class NetworkAnalyzer:
                 })
 
     def _check_dns_tunnel(self, packet: Packet, src_ip: str, packet_time: float) -> None:
-        """Detect DNS tunneling by tracking unusually long DNS queries."""
         if not packet.haslayer(DNSQR):
             return
 
@@ -181,7 +158,6 @@ class NetworkAnalyzer:
                 })
 
     def _check_brute_force(self, packet: Packet, src_ip: str, packet_time: float) -> None:
-        """Detect brute-force attempts by tracking rapid SYN connections."""
         flags = str(packet[TCP].flags)
         is_syn = "S" in flags and "A" not in flags
 
@@ -191,7 +167,6 @@ class NetworkAnalyzer:
         tracker = self.connection_tracker[src_ip]
         tracker.append(packet_time)
 
-        # Trim timestamps outside the window
         cutoff = packet_time - self.brute_force_window
         self.connection_tracker[src_ip] = [t for t in tracker if t > cutoff]
 
@@ -212,7 +187,6 @@ class NetworkAnalyzer:
                 })
 
     def evaluate_syn_floods(self) -> None:
-        """Evaluate any IPs that might have reached the SYN flood threshold by the end."""
         for ip, sent in list(self.syn_sent_count.items()):
             if sent >= self.syn_flood_threshold:
                 received = self.syn_ack_received_count.get(ip, 0)

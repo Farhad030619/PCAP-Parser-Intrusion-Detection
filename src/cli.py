@@ -4,7 +4,6 @@ import os
 import sys
 from typing import Dict, Any
 
-# Ensure parent directory of 'src' is in sys.path to support 'import src.analyzer' when executed directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from scapy.all import sniff
@@ -13,7 +12,6 @@ from src.analyzer import NetworkAnalyzer
 
 
 def main() -> None:
-    # Set up argument parsing
     parser = argparse.ArgumentParser(
         description="Network Intrusion Detection System (IDS) PCAP Analyzer"
     )
@@ -53,7 +51,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Verify input source constraints
     if not args.pcap_file and not args.live:
         print("Error: Either a PCAP file or the --live flag must be specified.", file=sys.stderr)
         sys.exit(1)
@@ -61,19 +58,16 @@ def main() -> None:
         print("Error: Cannot specify both a PCAP file and --live mode.", file=sys.stderr)
         sys.exit(1)
 
-    # Set up logging to console and to file
     logger = logging.getLogger("ids_alerts")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
 
-    # Console Handler (writes to stdout in RED)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_formatter = logging.Formatter("\033[91m[ALERT] %(message)s\033[0m")
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
-    # File Handler (writes to configured file with timestamp)
     try:
         file_handler = logging.FileHandler(args.output_log)
         file_handler.setLevel(logging.INFO)
@@ -87,7 +81,6 @@ def main() -> None:
     def log_alert(alert: Dict[str, Any]) -> None:
         logger.info(alert["message"])
 
-    # Initialize analyzer
     analyzer = NetworkAnalyzer(
         syn_flood_threshold=args.syn_threshold,
         syn_flood_ratio=args.syn_ratio,
@@ -116,10 +109,8 @@ def main() -> None:
             print(f"Error reading/parsing PCAP file: {e}", file=sys.stderr)
             sys.exit(1)
 
-    # Perform final evaluation for SYN floods
     analyzer.evaluate_syn_floods()
 
-    # Print final summary in Green
     packet_count = analyzer.packet_count
     total_alerts = len(analyzer.alerts)
     summary = (
