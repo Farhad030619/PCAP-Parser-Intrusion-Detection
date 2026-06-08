@@ -127,11 +127,29 @@ sudo ./.venv/bin/python3 src/web_ui.py
 > python3 src/web_ui.py
 > ```
 
+### Säkerhetsinställningar & Parametrar
+
+För att skydda din maskin lyssnar webbservern som standard endast på **localhost** (`127.0.0.1`). Eftersom applikationen körs med root-behörigheter (via `sudo`) bör du **aldrig** exponera den oskyddat på öppna nätverk.
+
+Om du vill anpassa IP-adress eller port kan du skicka med argument:
+* `--host`: Ange vilken IP-adress servern ska binda till (standard: `127.0.0.1`).
+* `--port`: Ange vilken port som ska användas (standard: `8000`).
+
+**Exempel på anpassad port:**
+```bash
+sudo ./.venv/bin/python3 src/web_ui.py --port 8080
+```
+
+**Exempel för att tillåta externa anslutningar (görs på egen risk på säkra nätverk):**
+```bash
+sudo ./.venv/bin/python3 src/web_ui.py --host 0.0.0.0 --port 8000
+```
+
 ### Öppna i Webbläsaren
 
 När servern har startat kan du öppna gränssnittet i din webbläsare på:
 
-[http://localhost:8000](http://localhost:8000)
+[http://localhost:8000](http://localhost:8000) (eller den port du har angett)
 
 ### Funktioner i Dashboarden
 

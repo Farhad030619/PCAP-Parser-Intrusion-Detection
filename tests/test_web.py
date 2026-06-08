@@ -162,3 +162,38 @@ def test_alert_file_logging(tmp_path):
         for h in original_handlers:
             src.web_ui.logger.addHandler(h)
 
+
+def test_security_validations(client):
+    # Test malicious interface name (potential command injection attempt)
+    bad_interfaces = [
+        "eth0; rm -rf /",
+        "lo0 && cat /etc/passwd",
+        "../../etc",
+        "en0|ls",
+        " "
+    ]
+    for iface in bad_interfaces:
+        payload = {
+            "interface": iface,
+            "syn_flood_threshold": 100,
+            "syn_flood_ratio": 10.0
+        }
+        response = client.post("/api/start", json=payload)
+        assert response.status_code == 400
+        assert "Invalid network interface name format" in response.json()["detail"]
+
+    # Test invalid numerical parameters (negative, zero, out of range)
+    invalid_payloads = [
+        {"interface": "en0", "syn_flood_threshold": -10, "syn_flood_ratio": 10.0},
+        {"interface": "en0", "syn_flood_threshold": 0, "syn_flood_ratio": 10.0},
+        {"interface": "en0", "syn_flood_threshold": 2000000, "syn_flood_ratio": 10.0},
+        {"interface": "en0", "syn_flood_threshold": 100, "syn_flood_ratio": -5.0},
+        {"interface": "en0", "syn_flood_threshold": 100, "syn_flood_ratio": 0.0},
+        {"interface": "en0", "syn_flood_threshold": 100, "syn_flood_ratio": 3000000.0},
+    ]
+    for payload in invalid_payloads:
+        response = client.post("/api/start", json=payload)
+        assert response.status_code == 400
+        assert "threshold" in response.json()["detail"] or "ratio" in response.json()["detail"]
+
+

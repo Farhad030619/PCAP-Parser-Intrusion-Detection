@@ -3,10 +3,11 @@ import time
 import json
 import asyncio
 import threading
+import re
 from typing import Dict, List, Set, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -183,6 +184,15 @@ def process_packet(packet: Any) -> None:
                 loop
             )
 
+def validate_sniff_params(interface: str, syn_flood_threshold: int, syn_flood_ratio: float) -> None:
+    """Validate network interface name and numerical sniffing parameters to prevent injection or abuse."""
+    if not interface or not re.match(r'^[a-zA-Z0-9.\-_:]+$', interface):
+        raise ValueError("Invalid network interface name format.")
+    if syn_flood_threshold <= 0 or syn_flood_threshold > 1000000:
+        raise ValueError("SYN flood threshold must be between 1 and 1,000,000.")
+    if syn_flood_ratio <= 0.0 or syn_flood_ratio > 1000000.0:
+        raise ValueError("SYN flood ratio must be positive and less than 1,000,000.")
+
 def start_sniff_logic(
     interface: str,
     syn_flood_threshold: int = 100,
@@ -260,10 +270,17 @@ def api_get_interfaces() -> dict:
 @app.post("/api/start")
 @app.post("/start")
 def api_start_sniffing(req: StartRequest) -> dict:
+    syn_threshold = req.syn_flood_threshold if req.syn_flood_threshold is not None else 100
+    syn_ratio = req.syn_flood_ratio if req.syn_flood_ratio is not None else 10.0
+    try:
+        validate_sniff_params(req.interface, syn_threshold, syn_ratio)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
     status = start_sniff_logic(
         interface=req.interface,
-        syn_flood_threshold=req.syn_flood_threshold if req.syn_flood_threshold is not None else 100,
-        syn_flood_ratio=req.syn_flood_ratio if req.syn_flood_ratio is not None else 10.0
+        syn_flood_threshold=syn_threshold,
+        syn_flood_ratio=syn_ratio
     )
     return {"status": status}
 
@@ -320,15 +337,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     syn_flood_threshold = msg.get("syn_flood_threshold", 100)
                     syn_flood_ratio = msg.get("syn_flood_ratio", 10.0)
                     
-                    status = start_sniff_logic(
-                        interface=iface,
-                        syn_flood_threshold=syn_flood_threshold,
-                        syn_flood_ratio=syn_flood_ratio
-                    )
-                    await websocket.send_json({
-                        "type": "status",
-                        "status": status
-                    })
+                    try:
+                        validate_sniff_params(iface, syn_flood_threshold, syn_flood_ratio)
+                        status = start_sniff_logic(
+                            interface=iface,
+                            syn_flood_threshold=syn_flood_threshold,
+                            syn_flood_ratio=syn_flood_ratio
+                        )
+                        await websocket.send_json({
+                            "type": "status",
+                            "status": status
+                        })
+                    except ValueError as e:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": str(e)
+                        })
                 elif action == "stop":
                     status = stop_sniff_logic()
                     await websocket.send_json({
@@ -376,5 +400,22 @@ def read_index() -> FileResponse:
     return FileResponse(index_path)
 
 if __name__ == "__main__":
+    import argparse
     import uvicorn
-    uvicorn.run("src.web_ui:app", host="0.0.0.0", port=8000, reload=True)
+    
+    parser = argparse.ArgumentParser(description="PCAP IDS Web Dashboard")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host address to bind the server to (default: 127.0.0.1 for local security)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to run the server on (default: 8000)"
+    )
+    args = parser.parse_args()
+    
+    uvicorn.run("src.web_ui:app", host=args.host, port=args.port, reload=True)
