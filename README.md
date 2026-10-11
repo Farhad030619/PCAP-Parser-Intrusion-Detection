@@ -1,80 +1,120 @@
-# Nätverksanalys & Intrusion Detection System (IDS)
+# Network Traffic Analyzer & Intrusion Detection System (IDS)
 
-Hej! Det här är mitt projekt för nätverkssäkerhet i praktiken. Det är ett Python-baserat IDS-verktyg som analyserar nätverkstrafik (antingen live direkt från nätverkskortet eller genom att läsa in en sparad `.pcap`-fil) för att upptäcka misstänkt aktivitet. Larmen sparas i en lokal loggfil och visas i realtid på ett schysst webb-dashboard.
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Scapy](https://img.shields.io/badge/packet--engine-Scapy-red.svg)](https://scapy.net/)
+[![FastAPI](https://img.shields.io/badge/dashboard-FastAPI%20%2B%20WebSockets-teal.svg)](https://fastapi.tiangolo.com/)
+[![Tests](https://img.shields.io/badge/tests-23%20passed-brightgreen.svg)](tests/)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
----
+A signature-based network intrusion detection system (NIDS) and packet capture analysis tool in Python. Supports live network interface packet capture and offline `.pcap` analysis, featuring four behavioral detection engines, structured alert logging, and an asynchronous real-time WebSocket dashboard.
 
-## Vad verktyget gör (Detektionsmotorer)
-
-Jag har byggt in 4 detektionsregler baserade på Scapy för att upptäcka vanliga attacker:
-
-1. **SYN-Flood DoS**: Om en IP-adress skickar jättemånga TCP SYN-paket men knappt får några SYN-ACK tillbaka, flaggas det som ett överbelastningsförsök.
-2. **ARP-Spoofing**: Håller koll på IP- till MAC-adresser. Om en IP-adress plötsligt dyker upp med flera olika MAC-adresser i nätverket varnar systemet för en Man-in-the-Middle (MitM) attack.
-3. **DNS-Tunneling**: Upptäcker om någon försöker smuggla ut data via DNS genom att kolla på längden på DNS-frågorna. Om en IP-adress skickar många extremt långa subdomänförfrågningar triggas larmet.
-4. **Brute-Force & Portskanning**: Hittar upprepade anslutningsförsök (TCP SYN) från en käll-IP under kort tid (t.ex. 20 anslutningar på 10 sekunder), vilket brukar tyda på skanning eller brute-force.
+Developed by **Farhad Jelve** (B.Sc. Electrical Engineering, KTH Royal Institute of Technology | Cisco CCNP Enterprise Core certified).
 
 ---
 
-## Hur projektet är uppbyggt
+## Detection Engines
 
-Här är filerna jag har lagt till:
-* **`src/`**
-  * `analyzer.py`: Själva detektionsmotorn som processar paketen och kör logiken för reglerna.
-  * `web_ui.py`: FastAPI-servern och WebSockets för dashboarden i webbläsaren.
-  * `cli.py`: CLI-gränssnittet om man vill köra via terminalen och analysera PCAP-filer direkt.
-* **`tests/`**: Mina enhetstester och integrationstester (totalt 23 stycken) för att säkerställa att allt fungerar.
-* **`services.json`**: En lista med kända tjänster (som YouTube, Netflix, Spotify) för att automatiskt namnge trafiken baserat på DNS.
-* **`WIRESHARK_GUIDE.md`**: En liten guide jag skrev om hur man genererar test-PCAP-filer med Wireshark/nmap/hping3.
+The engine processes raw packet frames using Scapy and validates traffic against four security detection models:
 
----
+1. **SYN-Flood Denial of Service (DoS):**
+   Tracks TCP state ratios. If an IP address transmits high volumes of TCP SYN packets with disproportionately low SYN-ACK acknowledgments, the engine flags anomalous connection exhaustion attempts.
 
-## Installation & Körning
+2. **ARP Spoofing & Cache Poisoning:**
+   Maintains dynamic IP-to-MAC state tables. If multiple hardware MAC addresses advertise ownership of a single IP address, the system alerts on potential Man-in-the-Middle (MitM) positioning.
 
-Verktyget kräver Python 3.12+.
+3. **DNS Tunneling & Data Exfiltration:**
+   Inspects DNS query labels and payload lengths. Detects encoded subdomains and exfiltration channels characterized by unusually long, high-entropy query strings.
 
-1. Skapa en virtuell miljö:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate  # (eller .venv\Scripts\activate.bat på Windows)
-   ```
-2. Installera paketen:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Köra i terminalen (CLI)
-För att analysera en sparad PCAP-fil:
-```bash
-python3 src/cli.py din-fil.pcap
-```
-För live-sniffning direkt från nätverkskortet (kräver `sudo` på macOS/Linux för att läsa råa paket):
-```bash
-sudo python3 src/cli.py --live
-```
-Du kan också anpassa gränsvärden, t.ex:
-```bash
-python3 src/cli.py din-fil.pcap --syn-threshold 50 --syn-ratio 5.0 -o mina_larm.log
-```
-
-### Köra Webb-Dashboarden
-För att starta webbservern:
-```bash
-sudo ./.venv/bin/python3 src/web_ui.py
-```
-*(Om du bara vill testa UI:t utan live-sniffing kan du starta utan `sudo`: `python3 src/web_ui.py`)*
-
-#### Säkerhetsinställningar
-Eftersom servern körs som root via `sudo` har jag begränsat den till att bara lyssna på **localhost** (`127.0.0.1`) som standard för att ingen annan på nätverket ska kunna köra kommandon.
-Om du kör på ett säkert nätverk och vill nå den utifrån kan du ändra host och port:
-```bash
-sudo ./.venv/bin/python3 src/web_ui.py --host 0.0.0.0 --port 8000
-```
-Sedan är det bara att öppna [http://localhost:8000](http://localhost:8000) i webbläsaren.
+4. **Port Scanning & Reconnaissance:**
+   Monitors connection attempt frequencies per source IP across configurable time windows (e.g. 20 connection attempts in 10 seconds) to identify reconnaissance sweeps.
 
 ---
 
-## Tester
-Mina tester körs enkelt med `pytest`:
+## System Architecture
+
+```text
+       [Network Interface (Live) / Saved .pcap File]
+                            │
+                            ▼
+               ┌────────────────────────┐
+               │    Scapy Sniffer Core   │
+               └────────────┬───────────┘
+                            │ Raw Packets
+                            ▼
+               ┌────────────────────────┐
+               │ Detection Engine Array │
+               │ • SYN Flood Ratio      │
+               │ • ARP Spoofing Cache   │
+               │ • DNS Tunnel Entropy   │
+               │ • Port Scan Velocity   │
+               └────────────┬───────────┘
+                            │ Anomaly Alerts
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+   ┌──────────────────────┐   ┌──────────────────────┐
+   │ Structured JSON Log  │   │ FastAPI WebSocket UI │
+   │ (Audit & SIEM Feed)  │   │ (Live Real-Time Feed)│
+   └──────────────────────┘   └──────────────────────┘
+```
+
+---
+
+## Installation & Setup
+
+Requirements: Python 3.10+ and libpcap / tcpdump dependencies for live packet capture.
+
+```bash
+git clone https://github.com/Farhad030619/PCAP-Parser-Intrusion-Detection.git
+cd PCAP-Parser-Intrusion-Detection
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## Usage
+
+### 1. Offline PCAP File Analysis
+Analyze an existing Wireshark packet capture:
+```bash
+python3 src/cli.py test.pcap
+```
+
+With custom alert thresholds and log export:
+```bash
+python3 src/cli.py test.pcap --syn-threshold 50 --syn-ratio 5.0 -o alerts.log
+```
+
+### 2. Live Interface Sniffing
+Promiscuous packet capture requires raw socket privileges:
+```bash
+sudo .venv/bin/python3 src/cli.py --live
+```
+
+### 3. Real-Time Web Dashboard
+Start the asynchronous FastAPI and WebSocket web service:
+```bash
+# Start on localhost (recommended for secure operations)
+python3 src/web_ui.py --host 127.0.0.1 --port 8000
+```
+Access the real-time visual monitor at `http://127.0.0.1:8000`.
+
+---
+
+## Testing
+
+Run the full pytest suite (23 unit and integration tests):
 ```bash
 pytest -v
 ```
+
+---
+
+## Author
+**Farhad Jelve**
+- **Education:** B.Sc. Electrical Engineering, KTH Royal Institute of Technology
+- **Certifications:** Cisco Certified Network Professional (CCNP Enterprise) and CCNA
+- **Specialization:** Network Security, Protocol Analysis, NetDevOps
+- **LinkedIn:** [Farhad Jelve](https://www.linkedin.com/in/farhad-jelve-9771a1270/)
